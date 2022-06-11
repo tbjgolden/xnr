@@ -10,3 +10,7 @@ Run a Node file (written in any JS/TS variant) from the CLI.
 ## Comparison to other tools
 
 tbc
+
+## License
+
+Apache-2.0

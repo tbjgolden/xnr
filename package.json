@@ -1,22 +1,19 @@
 {
   "name": "just-run",
   "description": "Run a Node file (written in any JS/TS variant) from the CLI",
-  "version": "0.0.0",
+  "license": "Apache-2.0",
+  "version": "0.0.1-alpha",
   "main": "lib/index.mjs",
   "module": "lib/index.mjs",
   "types": "lib/index.d.ts",
   "bin": {
-    "run": "./dist/run.mjs",
-    "just-run": "./dist/run.mjs"
-  },
-  "scripts": {
-    "help": "./cli/run.mjs ./.scripts/help.ts",
-    "help:name": "echo 'Rename npm project'",
-    "name": "./cli/run.mjs ./.scripts/name.ts",
-    "help:build": "echo 'Build npm project'",
-    "build": "esr ./.scripts/build.ts"
+    "jrun": "./cli/run.mjs",
+    "just-run": "./cli/run.mjs",
+    "jbuild": "./cli/build.mjs",
+    "just-build": "./cli/build.mjs"
   },
   "files": [
+    "cli",
     "lib"
   ],
   "release": {
@@ -29,8 +26,5 @@
     "astring": "1.8.3",
     "esprima-next": "5.8.3",
     "sucrase": "3.21.0"
-  },
-  "devDependencies": {
-    "enquirer": "^2.3.6"
   }
 }
