@@ -1,10 +1,6 @@
-#!/usr/bin/env node
-/* eslint-disable no-console */
-
+#!/usr/bin/env -S node --experimental-import-meta-resolve --no-warnings
 import { run } from "../lib/index.mjs";
-
 const args = process.argv.slice(2);
-
 if (args.length === 0) {
   console.log("run <fileToRun>");
   process.exit(1);
@@ -12,5 +8,3 @@ if (args.length === 0) {
   const [fileToRun, ...scriptArgs] = args;
   run(fileToRun, scriptArgs);
 }
-
-// build()

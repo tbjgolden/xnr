@@ -6,12 +6,13 @@
   "module": "lib/index.mjs",
   "types": "lib/index.d.ts",
   "bin": {
-    "run": "./dist/run.mjs"
+    "run": "./dist/run.mjs",
+    "just-run": "./dist/run.mjs"
   },
   "scripts": {
-    "help": "node ./cli/run.mjs ./.scripts/help.ts",
+    "help": "./cli/run.mjs ./.scripts/help.ts",
     "help:name": "echo 'Rename npm project'",
-    "name": "node ./cli/run.mjs ./.scripts/name.ts",
+    "name": "./cli/run.mjs ./.scripts/name.ts",
     "help:build": "echo 'Build npm project'",
     "build": "esr ./.scripts/build.ts"
   },
@@ -28,5 +29,8 @@
     "astring": "1.8.3",
     "esprima-next": "5.8.3",
     "sucrase": "3.21.0"
+  },
+  "devDependencies": {
+    "enquirer": "^2.3.6"
   }
 }
