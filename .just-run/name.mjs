@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {execSync} from 'node:child_process';
-import {prompt} from 'enquirer';
+import Enquirer from 'enquirer';
 import {validate} from './deps/npmName.mjs';
 import {rimraf} from './deps/rimraf.mjs';
 import {getPackageRoot} from './deps/package.mjs';
@@ -21,7 +21,7 @@ const main = async () => {
         console.log("  - " + error);
       }
     }
-    const {value} = await prompt({
+    const {value} = await Enquirer.prompt({
       type: "input",
       name: "value",
       message: "npm package name?",

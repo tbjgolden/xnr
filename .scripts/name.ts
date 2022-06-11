@@ -2,7 +2,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { execSync } from "node:child_process";
-import { prompt } from "enquirer";
+import Enquirer from "enquirer";
 import { validate } from "./deps/npmName";
 import { rimraf } from "./deps/rimraf";
 import { getPackageRoot } from "./deps/package";
@@ -30,7 +30,7 @@ const main = async () => {
       }
     }
 
-    const { value } = await prompt<{ value: string }>({
+    const { value } = await Enquirer.prompt<{ value: string }>({
       type: "input",
       name: "value",
       message: "npm package name?",
