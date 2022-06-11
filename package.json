@@ -1,26 +1,19 @@
 {
-  "name": "just-run",
-  "description": "Run a Node file (written in any JS/TS variant) from the CLI",
+  "name": "xnr",
+  "description": "Run any node file (written in any JS/TS variant) from the CLI",
   "license": "Apache-2.0",
   "version": "0.0.1-alpha",
   "main": "lib/index.mjs",
   "module": "lib/index.mjs",
   "types": "lib/index.d.ts",
   "bin": {
-    "jrun": "./cli/run.mjs",
-    "just-run": "./cli/run.mjs",
-    "jbuild": "./cli/build.mjs",
-    "just-build": "./cli/build.mjs"
+    "xnr": "./cli/run.mjs",
+    "xnrb": "./cli/build.mjs"
   },
   "files": [
     "cli",
     "lib"
   ],
-  "release": {
-    "branches": [
-      "main"
-    ]
-  },
   "dependencies": {
     "@typescript-eslint/typescript-estree": "^5.27.1",
     "astring": "1.8.3",

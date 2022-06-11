@@ -2,7 +2,7 @@
 import { build } from "../lib/index.mjs";
 const args = process.argv.slice(2);
 if (args.length === 0) {
-  console.log("$> build entryFile.ts [outDir?= .justrun]");
+  console.log("$> build entryFile.ts [outDir?= .xnr]");
   process.exit(1);
 } else {
   const [fileToRun, outputDirectory] = args;

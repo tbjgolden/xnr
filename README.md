@@ -1,6 +1,6 @@
-# `run` (just-run)
+# `xnr` (xtreme node runner)
 
-Run a Node file (written in any JS/TS variant) from the CLI.
+Run any node file (written in any JS/TS variant) from the CLI.
 
 - Written in JS only
 - No config
