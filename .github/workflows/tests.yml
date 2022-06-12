@@ -1,12 +1,12 @@
-name: Tests
+name: tests
 on:
   workflow_dispatch:
   push:
     branches:
       - main
 jobs:
-  release:
-    name: release
+  tests:
+    name: tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
