@@ -6,7 +6,7 @@ import { strict as assert } from "node:assert";
 
 const runNodeScript = async (entryFilePath) => {
   const absoluteEntryFilePath = path.join(process.cwd(), entryFilePath);
-  const outputDirectory = path.join(process.cwd(), ".jbuild");
+  const outputDirectory = path.join(process.cwd(), ".xnrb");
   const outputEntryFilePath = await build(absoluteEntryFilePath, outputDirectory);
   return new Promise((resolve) => {
     const child = fork(outputEntryFilePath, [], { stdio: "pipe" });
