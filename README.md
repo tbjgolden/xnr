@@ -38,6 +38,17 @@ Todos before beta:
 Verify the full table and create a test suite.
 
 - [ ] {js, jsx, ts, tsx, mjs, cjs, npmlib:mjs, npmlib:cjs} ^ 2
+- [ ] files should not always become mjs
+- [ ] https://nodejs.org/api/esm.html#differences-between-es-modules-and-commonjs
+  - [x] No require
+  - [x] __dirname
+  - [x] No Native Module Loading
+  - [x] No require.resolve
+  - [x] __filename
+  - [ ] No exports or module.exports
+  - [ ] No NODE_PATH
+  - [ ] No require.extensions
+  - [ ] No require.cache
 
 Todos before full release:
 
@@ -46,7 +57,6 @@ Todos before full release:
   - [ ] find ways to parallelise
   - [ ] rewrite to avoid typescript-estree
   - [ ] reuse asts
-- [ ] find full list of things that need to be polyfilled
 - [ ] make polyfills a bit more resilient
 
 -->
