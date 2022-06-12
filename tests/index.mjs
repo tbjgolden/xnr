@@ -7,10 +7,7 @@ import { strict as assert } from "node:assert";
 const runNodeScript = async (entryFilePath) => {
   const absoluteEntryFilePath = path.join(process.cwd(), entryFilePath);
   const outputDirectory = path.join(process.cwd(), ".jbuild");
-  const outputEntryFilePath = await build(
-    absoluteEntryFilePath,
-    outputDirectory
-  );
+  const outputEntryFilePath = await build(absoluteEntryFilePath, outputDirectory);
   return new Promise((resolve) => {
     const child = fork(outputEntryFilePath, [], { stdio: "pipe" });
     let stdout = "";
@@ -21,7 +18,7 @@ const runNodeScript = async (entryFilePath) => {
       stdout += data;
     });
     child.on("exit", async () => {
-      // await fs.promises.rm(outputDirectory, { recursive: true, force: true });
+      await fs.promises.rm(outputDirectory, { recursive: true, force: true });
       resolve(stdout.trim());
     });
   });
@@ -48,17 +45,13 @@ const defaultExport = async (file) => {
     successCount += 1;
   } catch (error) {
     console.error(error);
-    console.log(
-      `Tests: ${successCount} passed, 1 failed (default-export/${file})`
-    );
+    console.log(`Tests: ${successCount} passed, 1 failed (default-export/${file})`);
     process.exit(1);
   }
 };
 
 const main = async () => {
-  const singles = await fs.promises.readdir(
-    path.join(process.cwd(), "tests/single")
-  );
+  const singles = await fs.promises.readdir(path.join(process.cwd(), "tests/single"));
   for (const file of singles) {
     await single(file);
   }
