@@ -1,11 +1,12 @@
 {
   "name": "xnr",
-  "description": "Run any node file (written in any JS/TS variant) from the CLI",
+  "description": "Easily run any Node.js script (written in any JS/TS syntax) from the CLI.",
   "license": "Apache-2.0",
-  "version": "0.0.1-beta.1",
+  "version": "0.1.0",
   "main": "lib/index.mjs",
   "module": "lib/index.mjs",
   "types": "lib/index.d.ts",
+  "type": "module",
   "bin": {
     "xnr": "./cli/run.mjs",
     "xnrb": "./cli/build.mjs"
