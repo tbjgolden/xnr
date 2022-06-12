@@ -18,7 +18,7 @@ const runNodeScript = async (entryFilePath) => {
       stdout += data;
     });
     child.on("exit", async () => {
-      // await fs.promises.rm(outputDirectory, { recursive: true, force: true });
+      await fs.promises.rm(outputDirectory, { recursive: true, force: true });
       resolve(stdout.trim());
     });
   });

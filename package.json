@@ -10,6 +10,9 @@
     "xnr": "./cli/run.mjs",
     "xnrb": "./cli/build.mjs"
   },
+  "scripts": {
+    "test": "./cli/run.mjs tests"
+  },
   "files": [
     "cli",
     "lib"
