@@ -18,7 +18,7 @@ const runNodeScript = async (entryFilePath) => {
       stdout += data;
     });
     child.on("exit", async () => {
-      await fs.promises.rm(outputDirectory, { recursive: true, force: true });
+      // await fs.promises.rm(outputDirectory, { recursive: true, force: true });
       resolve(stdout.trim());
     });
   });
@@ -38,7 +38,6 @@ const single = async (file) => {
   }
 };
 
-const DEFAULT_EXPORT = JSON.stringify({ hello: "world" });
 const defaultExport = async (file) => {
   try {
     assert.equal(await runNodeScript("tests/default-export/" + file), "");
@@ -46,6 +45,18 @@ const defaultExport = async (file) => {
   } catch (error) {
     console.error(error);
     console.log(`Tests: ${successCount} passed, 1 failed (default-export/${file})`);
+    process.exit(1);
+  }
+};
+
+const IMPORT_ALL = new Array(6).fill(JSON.stringify({ hello: "world" })).join("\n");
+const importAll = async (file) => {
+  try {
+    assert.equal(await runNodeScript("tests/import-all/" + file), IMPORT_ALL);
+    successCount += 1;
+  } catch (error) {
+    console.error(error);
+    console.log(`Tests: ${successCount} passed, 1 failed (import-all/${file})`);
     process.exit(1);
   }
 };
@@ -60,6 +71,12 @@ const main = async () => {
   );
   for (const file of defaultExports) {
     await defaultExport(file);
+  }
+  const importAlls = await fs.promises.readdir(
+    path.join(process.cwd(), "tests/import-all")
+  );
+  for (const file of importAlls) {
+    await importAll(file);
   }
   console.log(`Tests: ${successCount} passed`);
 };
