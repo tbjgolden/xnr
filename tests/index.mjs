@@ -26,58 +26,45 @@ const runNodeScript = async (entryFilePath) => {
 
 let successCount = 0;
 
-const SINGLE = JSON.stringify({ hello: "world" });
-const single = async (file) => {
-  try {
-    assert.equal(await runNodeScript("tests/single/" + file), SINGLE);
-    successCount += 1;
-  } catch (error) {
-    console.error(error);
-    console.log(`Tests: ${successCount} passed, 1 failed (single/${file})`);
-    process.exit(1);
-  }
-};
-
-const defaultExport = async (file) => {
-  try {
-    assert.equal(await runNodeScript("tests/default-export/" + file), "");
-    successCount += 1;
-  } catch (error) {
-    console.error(error);
-    console.log(`Tests: ${successCount} passed, 1 failed (default-export/${file})`);
-    process.exit(1);
-  }
-};
-
-const IMPORT_ALL = new Array(6).fill(JSON.stringify({ hello: "world" })).join("\n");
-const importAll = async (file) => {
-  try {
-    assert.equal(await runNodeScript("tests/import-all/" + file), IMPORT_ALL);
-    successCount += 1;
-  } catch (error) {
-    console.error(error);
-    console.log(`Tests: ${successCount} passed, 1 failed (import-all/${file})`);
-    process.exit(1);
+const test = async (subdir, expected) => {
+  const files = (
+    await fs.promises.readdir(path.join(process.cwd(), "tests", subdir), {
+      withFileTypes: true,
+    })
+  )
+    .filter((dirent) => dirent.isFile())
+    .map((dirent) => dirent.name);
+  for (const file of files) {
+    try {
+      assert.equal(await runNodeScript(`tests/${subdir}/${file}`), expected);
+      successCount += 1;
+    } catch (error) {
+      console.error(error);
+      console.log(`Tests: ${successCount} passed, 1 failed (${subdir}/${file})`);
+      process.exit(1);
+    }
   }
 };
 
 const main = async () => {
-  const singles = await fs.promises.readdir(path.join(process.cwd(), "tests/single"));
-  for (const file of singles) {
-    await single(file);
-  }
-  const defaultExports = await fs.promises.readdir(
-    path.join(process.cwd(), "tests/default-export")
+  await test("single", JSON.stringify({ hello: "world" }));
+  await test("default-export", "");
+  await test(
+    "import-all",
+    new Array(6).fill(JSON.stringify({ hello: "world" })).join("\n")
   );
-  for (const file of defaultExports) {
-    await defaultExport(file);
-  }
-  const importAlls = await fs.promises.readdir(
-    path.join(process.cwd(), "tests/import-all")
+  await test(
+    "resolve",
+    `z.ts z.z.ts z/index.ts z.z/index.ts z/index.ts z.z/index.ts z.ts z.z.ts z/index.ts z.z/index.ts z.ts z.z.ts`
+      .split(" ")
+      .join("\n")
   );
-  for (const file of importAlls) {
-    await importAll(file);
-  }
+  await test(
+    "resolve2",
+    `z.ts z.z.ts z/index.ts z.z/index.ts z/index.ts z.z/index.ts z.ts z.z.ts z/index.ts z.z/index.ts z.ts z.z.ts`
+      .split(" ")
+      .join("\n")
+  );
   console.log(`Tests: ${successCount} passed`);
 };
 
