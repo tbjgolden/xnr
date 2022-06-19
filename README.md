@@ -1,6 +1,6 @@
 # `xnr` (xtreme node runner)
 
-![GitHub Workflow Status](https://img.shields.io/github/workflow/status/tbjgolden/xnr/tests)
+![GitHub Workflow Status](https://img.shields.io/github/workflow/status/tbjgolden/xnr/tests) ![npm](https://img.shields.io/npm/v/xnr)
 
 ![xtreme](xtreme.jpg)
 
