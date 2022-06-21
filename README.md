@@ -94,11 +94,6 @@ Apache-2.0
 
 Todos before full release:
 
-- [ ] optimise
-  - [ ] less blocking code
-  - [ ] find ways to parallelise
-  - [ ] rewrite to avoid typescript-estree
-  - [ ] reuse asts
-- [ ] make polyfills a bit more resilient
+- [x] tsconfig.json support
 
 -->
