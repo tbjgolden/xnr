@@ -94,6 +94,11 @@ Apache-2.0
 
 Todos before full release:
 
-- [x] tsconfig.json support
+- [ ] tsconfig.json support
+- [ ] compile - a single raw file str to raw file str
+
+- There must be a nicer way to do this
+  - perhaps build a static [absolute source path x import string] => absolute dest path map
+  - separately a nice relative path resolver
 
 -->
