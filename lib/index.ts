@@ -141,6 +141,9 @@ export const build = async (
           outputPath.slice(0, outputPath.length - path.extname(outputPath).length) +
           outputFormat;
         const outputFilePath = path.resolve(outputDirectory, outputPath);
+        if (outputEntryFilePath === "") {
+          outputEntryFilePath = outputFilePath;
+        }
 
         return [
           path.relative(
@@ -186,10 +189,6 @@ export const build = async (
           prelude =
             "import { createRequire } from 'node:module';\n" +
             "const require = createRequire(import.meta.url);\n";
-        }
-
-        if (outputEntryFilePath === "") {
-          outputEntryFilePath = outputFilePath;
         }
 
         await fs.promises.mkdir(path.join(outputFilePath, ".."), {

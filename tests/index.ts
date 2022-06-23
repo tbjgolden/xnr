@@ -50,7 +50,6 @@ const test = async (subdir, expected) => {
 };
 
 const main = async () => {
-  console.log(process.cwd());
   try {
     await test("single", JSON.stringify({ hello: "world" }));
     await test("default-export", "");
