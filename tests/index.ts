@@ -6,7 +6,7 @@ import fs from "node:fs";
 import { strict as assert } from "node:assert";
 
 const runNodeScript = async (
-  entryFilePath,
+  entryFilePath: string,
   outputDirectory = path.join(process.cwd(), ".xnrb")
 ) => {
   const absoluteEntryFilePath = path.resolve(entryFilePath);
@@ -31,7 +31,7 @@ const runNodeScript = async (
 
 let successCount = 0;
 
-const test = async (subdir, expected) => {
+const test = async (subdir: string, expected: string) => {
   const dirents = await fs.promises.readdir(path.join(process.cwd(), "tests", subdir), {
     withFileTypes: true,
   });
