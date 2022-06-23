@@ -8,6 +8,7 @@ import { transform } from "sucrase";
 import { getTsconfig, createPathsMatcher } from "get-tsconfig";
 import { parseModule } from "esprima-next";
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Node = any;
 type AST = ReturnType<typeof parseModule>;
 type ResolveData = {
@@ -57,7 +58,7 @@ export const build = async (
       explored.add(filePath);
 
       // 1. find file from filepath, likelyExtension and entryMethod
-      let actualFilePath = await findActualFilePath(filePath, likelyExtension);
+      const actualFilePath = await findActualFilePath(filePath, likelyExtension);
       // 2. get as input string
       const actualFileString = await fs.promises.readFile(actualFilePath, "utf8");
       // 3. use sucrase to turn it into output string, store for later
@@ -84,12 +85,15 @@ export const build = async (
       // #. find config file if hasn't already found one for this dir
       const pathResolvers = getResolveData(filePath);
       // #. read file for imports/exports/requires
-      const dependencies = (await readForDependencies(ast, pathResolvers)).filter(
-        ([dependency]) => !isNodeBuiltin(dependency)
-      );
+      const dependenciesData = await readForDependencies(ast, pathResolvers);
+      const dependencies = dependenciesData.filter(([dependency]) => {
+        return !isNodeBuiltin(dependency);
+      });
       // #. filter to internal dependencies
       const dependencyMap = new Map(
-        dependencies.map(([resolved, , original]) => [original, resolved])
+        dependencies.map(([resolved, , original]) => {
+          return [original, resolved];
+        })
       );
       for (const [dependency, entryMethod] of dependencies) {
         if (dependency.startsWith(".") || dependency.startsWith("/")) {
@@ -126,7 +130,7 @@ export const build = async (
   await fs.promises.rm(outputDirectory, { recursive: true, force: true });
   await fs.promises.mkdir(outputDirectory, { recursive: true });
 
-  let outputEntryFilePath: string = "";
+  let outputEntryFilePath = "";
 
   const internalSourceFilesMap = new Map<string, InternalSourceFile>(
     internalSourceFiles.map(
@@ -196,7 +200,7 @@ export const build = async (
     )
   );
 
-  return outputEntryFilePath;
+  return outputEntryFilePath === "" ? undefined : outputEntryFilePath;
 };
 
 /**
@@ -210,13 +214,17 @@ export const run = async (
   const outputEntryFilePath = await build(entryFilePath, outputDirectory);
 
   if (outputEntryFilePath === undefined) {
-    console.error("No entry file to run");
-    process.exit(1);
+    throw new Error("No entry file to run");
   } else {
     const child = fork(outputEntryFilePath, args, { stdio: "inherit" });
     child.on("exit", async (code) => {
       await fs.promises.rm(outputDirectory, { recursive: true, force: true });
-      process.exit(code ?? 1);
+      if (require.main === module) {
+        // eslint-disable-next-line unicorn/no-process-exit
+        process.exit(code ?? 1);
+      } else {
+        throw new Error(`Finished with error code ${code}`);
+      }
     });
   }
 };
@@ -226,35 +234,44 @@ const findActualFilePath = async (filePath_: string, likelyExtension = "") => {
   const filePath = path.join(filePath_, ".");
 
   try {
-    if ((await fs.promises.lstat(filePath)).isFile()) {
+    const stats = await fs.promises.lstat(filePath);
+    if (stats.isFile()) {
       return filePath;
     }
-  } catch {}
+  } catch {
+    //
+  }
 
   const dirname = path.dirname(filePath);
   const filename = filePath.slice(dirname.length + 1);
   const anyExt = new Set();
   let hasSub = false;
   // scan dirs for possible matches
-  for (const dirContent of await fs.promises.readdir(dirname, {
+  for (const directoryContent of await fs.promises.readdir(dirname, {
     withFileTypes: true,
   })) {
-    if (dirContent.name === filename || dirContent.name.startsWith(filename + ".")) {
-      if (dirContent.isFile()) {
-        anyExt.add(dirContent.name);
-      } else if (dirContent.isDirectory() && dirContent.name === filename) {
+    if (
+      directoryContent.name === filename ||
+      directoryContent.name.startsWith(filename + ".")
+    ) {
+      if (directoryContent.isFile()) {
+        anyExt.add(directoryContent.name);
+      } else if (directoryContent.isDirectory() && directoryContent.name === filename) {
         hasSub = true;
       }
     }
   }
   const subAnyExt = new Set();
   if (hasSub) {
-    for (const dirContent of await fs.promises.readdir(filePath, {
+    for (const directoryContent of await fs.promises.readdir(filePath, {
       withFileTypes: true,
     })) {
-      if (dirContent.name === "index" || dirContent.name.startsWith("index.")) {
-        if (dirContent.isFile()) subAnyExt.add(dirContent.name);
-      }
+      if (
+        (directoryContent.name === "index" ||
+          directoryContent.name.startsWith("index.")) &&
+        directoryContent.isFile()
+      )
+        subAnyExt.add(directoryContent.name);
     }
   }
   // compare possible matches in sensible order
@@ -416,7 +433,9 @@ const readForDependencies = async (ast: AST, resolveData: ResolveData) => {
             await findActualFilePath(match);
             dependencyPair[0] = match;
             break;
-          } catch {}
+          } catch {
+            //
+          }
         }
       }
     }
@@ -539,10 +558,13 @@ const updateImports = async (
       case "ImportDeclaration":
         if (node.importKind === "type") break;
         if (node.source && node.source.value) {
-          const defaultImport = node.specifiers.find((node: Node) => !node.imported)
-            ?.local?.name;
+          const defaultImport = node.specifiers.find((node: Node) => {
+            return !node.imported;
+          })?.local?.name;
           const namedImports = node.specifiers
-            .filter((node: Node) => node.imported)
+            .filter((node: Node) => {
+              return node.imported;
+            })
             .map(
               ({
                 local,
@@ -550,7 +572,9 @@ const updateImports = async (
               }: {
                 local: { name: string };
                 imported: { name: string };
-              }) => [imported.name, local.name]
+              }) => {
+                return [imported.name, local.name];
+              }
             );
           const value = ensure(node.source.value);
           const isExternalDependency = !(

@@ -41,12 +41,12 @@ Benchmarks
 - xnr
   - size: 3.4MB
   - speed: 28.3ms/run
-  - passes interop test out-of-box: 18/18
+  - passes interop test: 18/18
 - ts-node
   - size: 70MB
   - speed: 158.5ms/run
   - config issues during setup: 1
-  - passes interop test out-of-box\*: 10/18
+  - passes interop test\*: 10/18
 - swc-node
   - size: 208M
   - speed: 22.4ms/run

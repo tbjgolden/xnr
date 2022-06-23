@@ -15,7 +15,6 @@ const ignorePatterns = fs
 module.exports = {
   env: {
     browser: true,
-    jest: true,
     node: true,
   },
   parser: "@typescript-eslint/parser",
@@ -73,13 +72,15 @@ module.exports = {
     ],
     "unicorn/prefer-switch": ["error", { minimumCases: 5 }],
     "unicorn/no-new-array": "off",
+
+    "unicorn/prefer-module": "off",
+    "@typescript-eslint/no-var-requires": "off",
   },
   overrides: [
     {
-      files: ["*.cjs"],
+      files: ["tests/**"],
       rules: {
-        "unicorn/prefer-module": "off",
-        "@typescript-eslint/no-var-requires": "off",
+        "no-console": "off",
       },
     },
   ],

@@ -3,7 +3,7 @@
     "target": "es2017",
     "lib": [],
     "jsx": "react",
-    "module": "es2020",
+    "module": "commonjs",
     "moduleResolution": "node",
     "resolveJsonModule": true,
     "declaration": true,

@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { fork } from "node:child_process";
 import { build } from "../dist/cjs/index.js";
 import path from "node:path/posix";
@@ -10,32 +11,38 @@ const runNodeScript = async (
 ) => {
   const absoluteEntryFilePath = path.resolve(entryFilePath);
   const outputEntryFilePath = await build(absoluteEntryFilePath, outputDirectory);
-  return new Promise((resolve) => {
-    const child = fork(outputEntryFilePath, [], { stdio: "pipe" });
-    let stdout = "";
-    child.stdout.on("data", (data) => {
-      stdout += data;
+  if (outputEntryFilePath !== undefined) {
+    return new Promise((resolve) => {
+      const child = fork(outputEntryFilePath, [], { stdio: "pipe" });
+      let stdout = "";
+      child.stdout?.on("data", (data) => {
+        stdout += data;
+      });
+      child.stderr?.on("data", (data) => {
+        stdout += data;
+      });
+      child.on("exit", async () => {
+        await fs.promises.rm(outputDirectory, { recursive: true, force: true });
+        resolve(stdout.trim());
+      });
     });
-    child.stderr.on("data", (data) => {
-      stdout += data;
-    });
-    child.on("exit", async () => {
-      await fs.promises.rm(outputDirectory, { recursive: true, force: true });
-      resolve(stdout.trim());
-    });
-  });
+  }
 };
 
 let successCount = 0;
 
 const test = async (subdir, expected) => {
-  const files = (
-    await fs.promises.readdir(path.join(process.cwd(), "tests", subdir), {
-      withFileTypes: true,
+  const dirents = await fs.promises.readdir(path.join(process.cwd(), "tests", subdir), {
+    withFileTypes: true,
+  });
+
+  const files = dirents
+    .filter((dirent) => {
+      return dirent.isFile() && !dirent.name.endsWith(".json");
     })
-  )
-    .filter((dirent) => dirent.isFile())
-    .map((dirent) => dirent.name);
+    .map((dirent) => {
+      return dirent.name;
+    });
   for (const file of files) {
     assert.equal(await runNodeScript(`tests/${subdir}/${file}`), expected);
     successCount += 1;
