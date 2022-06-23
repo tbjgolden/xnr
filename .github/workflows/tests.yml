@@ -15,4 +15,5 @@ jobs:
           cache: npm
           node-version: 16
       - run: npm ci
+      - run: pwd
       - run: ./prev/xnr ./tests/index.ts
