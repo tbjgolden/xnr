@@ -17,4 +17,4 @@ jobs:
       - run: npm ci
       - run: pwd
       - run: ls -la
-      - run: ./prev/xnr ./tests/index.ts
+      - run: npm run test
