@@ -7,8 +7,8 @@
   "module": "dist/esm/index.mjs",
   "types": "dist/cjs/index.d.ts",
   "bin": {
-    "xnr": "./cli/run.mjs",
-    "xnrb": "./cli/build.mjs"
+    "xnr": "./dist/run.mjs",
+    "xnrb": "./dist/build.mjs"
   },
   "prettier": {
     "printWidth": 90
