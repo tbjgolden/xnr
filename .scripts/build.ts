@@ -111,7 +111,7 @@ const main = async () => {
         import xnr from "../cjs/index.js";
 
         export const build = xnr.build;
-        export const run = xnr.run;      
+        export const run = xnr.run;
       `
     );
   }

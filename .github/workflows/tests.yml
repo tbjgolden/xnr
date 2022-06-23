@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - main
+      - "*"
 jobs:
   tests:
     name: tests
@@ -15,4 +15,6 @@ jobs:
           cache: npm
           node-version: 16
       - run: npm ci
-      - run: ./prev/xnr ./tests/index.ts
+      - run: pwd
+      - run: ls -la
+      - run: npm run test

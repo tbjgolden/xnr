@@ -20,7 +20,7 @@
     "help:build": "echo 'Build npm project'",
     "build": "./prev/xnr ./.scripts/build.ts",
     "help:test": "echo 'Run tests once'",
-    "test": "./prev/xnr ./tests/index.ts",
+    "test": "npm run build && ./prev/xnr ./tests/index.ts",
     "help:lint": "echo 'Lint all files, output to stdout'",
     "lint": "eslint lib",
     "help:types": "echo 'Typecheck all TS files, output to stdout'",
