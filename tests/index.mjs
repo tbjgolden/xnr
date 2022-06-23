@@ -1,5 +1,5 @@
 import { fork } from "node:child_process";
-import { build } from "../lib/index.mjs";
+import { build } from "../dist/cjs/index.js";
 import path from "node:path/posix";
 import fs from "node:fs";
 import { strict as assert } from "node:assert";
@@ -62,8 +62,11 @@ const main = async () => {
         .split(" ")
         .join("\n")
     );
+    await test(
+      "tsconfig",
+      `z.ts z.z.ts z/index.ts z.z/index.ts z/index.ts z.z/index.ts`.split(" ").join("\n")
+    );
 
-    console.log("-----\n\n");
     await runNodeScript(
       path.join(process.cwd(), "tests/resolve/mjs.mjs"),
       "xnr-test-dir"
@@ -71,11 +74,11 @@ const main = async () => {
     successCount += 1;
   } catch (error) {
     console.error(error);
-    console.log(`Tests: ${successCount} passed, 1 failed`);
+    console.log(`\nTests: ${successCount} passed, 1 failed`);
     process.exit(1);
   }
 
-  console.log(`Tests: ${successCount} passed`);
+  console.log(`\nTests: ${successCount} passed`);
 };
 
 main();

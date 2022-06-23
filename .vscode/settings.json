@@ -1,0 +1,11 @@
+{
+  "editor.formatOnSave": true,
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": true,
+    "source.fixAll.stylelint": true
+  },
+  "prettier.prettierPath": "node_modules/prettier",
+  "css.validate": false,
+  "less.validate": false,
+  "scss.validate": false
+}

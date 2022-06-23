@@ -1,5 +1,5 @@
 #!/usr/bin/env -S node --experimental-import-meta-resolve --no-warnings
-import { run } from "../lib/index.mjs";
+import { run } from "../lib/index";
 const args = process.argv.slice(2);
 if (args.length === 0) {
   console.log("$> run fileToRun.js");

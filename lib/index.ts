@@ -1,28 +1,41 @@
 import fs from "node:fs";
 import path from "node:path/posix";
 import { fork } from "node:child_process";
-import { createRequire, builtinModules } from "node:module";
+import { builtinModules } from "node:module";
 import { randomUUID } from "node:crypto";
-import { fileURLToPath } from "url";
 import { generate } from "astring";
 import { transform } from "sucrase";
 import { getTsconfig, createPathsMatcher } from "get-tsconfig";
-const require = createRequire(import.meta.url);
-const { parseModule } = require("esprima-next");
+import { parseModule } from "esprima-next";
+
+type Node = any;
+type AST = ReturnType<typeof parseModule>;
+type ResolveData = {
+  baseUrl: string | null;
+  dirname: string;
+  configPath: string | null;
+  matcher: ((specifier: string) => string[]) | null;
+  paths: Record<string, Array<string>>;
+  ext: string;
+};
+type InternalSourceFile = {
+  rawInputFile: string;
+  inputFile: string;
+  outputFormat: ".cjs" | ".mjs";
+  outputFilePath: string;
+  dependencyMap: Map<string, string>;
+};
 
 /**
  * Convert source code from an entry file into a directory of node-friendly esm code
- * @param {string} entryFilePath
- * @param {string | undefined} outputDirectory @default path.join(process.cwd(), ".xnrb")
- * @returns {Promise<string | undefined>} outputEntryFilePath
  */
 export const build = async (
-  entryFilePath,
-  outputDirectory = path.join(process.cwd(), ".xnrb")
-) => {
+  entryFilePath: string,
+  outputDirectory: string | undefined = path.join(process.cwd(), ".xnrb")
+): Promise<string | undefined> => {
   outputDirectory = path.resolve(outputDirectory);
 
-  const astCache = new Map();
+  const astCache = new Map<string, AST>();
 
   const firstFilePath = path.resolve(process.cwd(), entryFilePath);
   const fileStack = [
@@ -30,13 +43,16 @@ export const build = async (
       filePath: firstFilePath,
       likelyExtension: path.extname(firstFilePath),
       entryMethod: "entry",
-      dependencyMap: new Map(),
     },
   ];
   const explored = new Set();
-  const internalSourceFiles = [];
+  const internalSourceFiles: Array<Omit<InternalSourceFile, "outputFilePath">> = [];
   while (fileStack.length > 0) {
-    const { filePath, likelyExtension, entryMethod: _ } = fileStack.pop();
+    const { filePath, likelyExtension } = fileStack.pop() as {
+      filePath: string;
+      likelyExtension: string;
+      entryMethod: "entry" | "import" | "require";
+    };
     if (!explored.has(filePath)) {
       explored.add(filePath);
 
@@ -46,7 +62,10 @@ export const build = async (
       const actualFileString = await fs.promises.readFile(actualFilePath, "utf8");
       // 3. use sucrase to turn it into output string, store for later
       let { code } = transform(actualFileString, {
-        transforms: ["typescript", ...(actualFilePath.endsWith(".ts") ? [] : ["jsx"])],
+        transforms: [
+          "typescript",
+          ...(actualFilePath.endsWith(".ts") ? [] : ["jsx" as const]),
+        ],
         jsxPragma: "React.createClass",
         jsxFragmentPragma: "React.Fragment",
         enableLegacyTypeScriptModuleInterop: false,
@@ -60,10 +79,10 @@ export const build = async (
         code = code.slice(code.indexOf("\n") + 1);
       }
       // #. parse into an ast. cache for later key by filepath
-      const ast = parseModule(code);
+      const ast: AST = parseModule(code);
       astCache.set(filePath, ast);
       // #. find config file if hasn't already found one for this dir
-      const pathResolvers = getPathResolvers(filePath);
+      const pathResolvers = getResolveData(filePath);
       // #. read file for imports/exports/requires
       const dependencies = (await readForDependencies(ast, pathResolvers)).filter(
         ([dependency]) => !isNodeBuiltin(dependency)
@@ -107,9 +126,9 @@ export const build = async (
   await fs.promises.rm(outputDirectory, { recursive: true, force: true });
   await fs.promises.mkdir(outputDirectory, { recursive: true });
 
-  let outputEntryFilePath;
+  let outputEntryFilePath: string = "";
 
-  const internalSourceFilesMap = new Map(
+  const internalSourceFilesMap = new Map<string, InternalSourceFile>(
     internalSourceFiles.map(
       ({ rawInputFile, inputFile, outputFormat, dependencyMap }) => {
         let outputPath =
@@ -139,8 +158,6 @@ export const build = async (
     )
   );
 
-  console.log(internalSourceFilesMap);
-
   await Promise.all(
     [...internalSourceFilesMap.values()].map(
       async ({
@@ -152,12 +169,11 @@ export const build = async (
       }) => {
         const newFile = await updateImports(
           rawInputFile,
-          astCache.get(rawInputFile),
+          astCache.get(rawInputFile) as AST,
           outputDirectory,
           path.relative(commonRootPath, inputFile),
           internalSourceFilesMap,
-          dependencyMap,
-          commonRootPath
+          dependencyMap
         );
 
         /* Enable require from esm */
@@ -168,7 +184,7 @@ export const build = async (
             "const require = createRequire(import.meta.url);\n";
         }
 
-        if (outputEntryFilePath === undefined) {
+        if (outputEntryFilePath === "") {
           outputEntryFilePath = outputFilePath;
         }
 
@@ -185,16 +201,12 @@ export const build = async (
 
 /**
  * Runs a file, no questions asked (auto-transpiling it and its dependencies as required)
- * @param {string} entryFilePath
- * @param {string[]} args
- * @param {string | undefined} outputDirectory @default path.join(process.cwd(), ".xnrb")
- * @returns {Promise<string | undefined>} outputEntryFilePath
  */
 export const run = async (
-  entryFilePath,
-  args = [],
-  outputDirectory = path.join(process.cwd(), ".xnr")
-) => {
+  entryFilePath: string,
+  args: string[] = [],
+  outputDirectory: string | undefined = path.join(process.cwd(), ".xnr")
+): Promise<void> => {
   const outputEntryFilePath = await build(entryFilePath, outputDirectory);
 
   if (outputEntryFilePath === undefined) {
@@ -204,12 +216,15 @@ export const run = async (
     const child = fork(outputEntryFilePath, args, { stdio: "inherit" });
     child.on("exit", async (code) => {
       await fs.promises.rm(outputDirectory, { recursive: true, force: true });
-      process.exit(code);
+      process.exit(code ?? 1);
     });
   }
 };
 
-const findActualFilePath = async (filePath, likelyExtension = "") => {
+const findActualFilePath = async (filePath_: string, likelyExtension = "") => {
+  const endsWithSlash = filePath_.endsWith("/");
+  const filePath = path.join(filePath_, ".");
+
   try {
     if ((await fs.promises.lstat(filePath)).isFile()) {
       return filePath;
@@ -243,50 +258,88 @@ const findActualFilePath = async (filePath, likelyExtension = "") => {
     }
   }
   // compare possible matches in sensible order
-  if (likelyExtension !== "") {
-    if (subAnyExt.has("index" + likelyExtension)) {
-      // sub/index.likelyExtension
-      return filePath + "/index" + likelyExtension;
+  if (endsWithSlash) {
+    if (likelyExtension !== "") {
+      if (subAnyExt.has("index" + likelyExtension)) {
+        // sub/index.likelyExtension
+        return filePath + "/index" + likelyExtension;
+      }
+      if (anyExt.has(filename + likelyExtension)) {
+        // sub.likelyExtension
+        return filePath + likelyExtension;
+      }
     }
-    if (anyExt.has(filename + likelyExtension)) {
-      // sub.likelyExtension
-      return filePath + likelyExtension;
+    const EXTENSION_ORDER = [".tsx", ".ts", ".mjs", ".cjs", ".jsx", ".js"];
+    for (const EXT of EXTENSION_ORDER) {
+      if (subAnyExt.has("index" + EXT)) {
+        // sub/index.commonExtension
+        return filePath + "/index" + EXT;
+      }
     }
-  }
-  const EXTENSION_ORDER = [likelyExtension, ".tsx", ".ts", ".mjs", ".cjs", ".jsx", ".js"];
-  for (const EXT of EXTENSION_ORDER) {
-    if (subAnyExt.has("index" + EXT)) {
-      // sub/index.commonExtension
-      return filePath + "/index" + EXT;
+    for (const EXT of EXTENSION_ORDER) {
+      if (anyExt.has(filename + EXT)) {
+        // sub.commonExtension
+        return filePath + EXT;
+      }
     }
-  }
-  for (const EXT of EXTENSION_ORDER) {
-    if (anyExt.has(filename + EXT)) {
-      // sub.commonExtension
-      return filePath + EXT;
+    if (subAnyExt.has("index")) {
+      // sub/index
+      return filePath + "/index";
     }
-  }
-  if (subAnyExt.has("index")) {
-    // sub/index
-    return filePath + "/index";
-  }
-  if (subAnyExt.size === 1) {
-    // sub/index.any
-    return filePath + "/index" + subAnyExt.values().next().value;
-  }
-  if (anyExt.size === 1) {
-    // sub.any
-    return filePath + anyExt.values().next().value;
+    if (subAnyExt.size === 1) {
+      // sub/index.any
+      return filePath + "/index" + subAnyExt.values().next().value;
+    }
+    if (anyExt.size === 1) {
+      // sub.any
+      return filePath + anyExt.values().next().value;
+    }
+  } else {
+    if (likelyExtension !== "") {
+      if (anyExt.has(filename + likelyExtension)) {
+        // sub.likelyExtension
+        return filePath + likelyExtension;
+      }
+      if (subAnyExt.has("index" + likelyExtension)) {
+        // sub/index.likelyExtension
+        return filePath + "/index" + likelyExtension;
+      }
+    }
+    const EXTENSION_ORDER = [".tsx", ".ts", ".mjs", ".cjs", ".jsx", ".js"];
+    for (const EXT of EXTENSION_ORDER) {
+      if (anyExt.has(filename + EXT)) {
+        // sub.commonExtension
+        return filePath + EXT;
+      }
+    }
+    for (const EXT of EXTENSION_ORDER) {
+      if (subAnyExt.has("index" + EXT)) {
+        // sub/index.commonExtension
+        return filePath + "/index" + EXT;
+      }
+    }
+    if (subAnyExt.has("index")) {
+      // sub/index
+      return filePath + "/index";
+    }
+    if (anyExt.size === 1) {
+      // sub.any
+      return filePath + anyExt.values().next().value;
+    }
+    if (subAnyExt.size === 1) {
+      // sub/index.any
+      return filePath + "/index" + subAnyExt.values().next().value;
+    }
   }
   throw new Error(`Could not resolve ${path.relative(process.cwd(), filePath)}`);
 };
 
 // ----------------------------------------------------------------
 
-const readForDependencies = async (ast, pathResolvers) => {
-  const dependencies = [];
+const readForDependencies = async (ast: AST, resolveData: ResolveData) => {
+  const dependencies: Array<[string, "import" | "require", string]> = [];
 
-  traverse(ast, (node) => {
+  traverse(ast, (node: Node) => {
     switch (node.type) {
       case "ImportExpression":
         if (node.source && node.source.value) {
@@ -354,13 +407,14 @@ const readForDependencies = async (ast, pathResolvers) => {
   });
 
   // apply resolve logic here
-  if (dependencies.length > 0 && pathResolvers.matcher !== null) {
+  if (dependencies.length > 0 && resolveData.matcher !== null) {
     for (const dependencyPair of dependencies) {
-      const matches = pathResolvers.matcher(dependencyPair[0]);
+      const matches = resolveData.matcher(dependencyPair[0]);
       if (matches.length > 0) {
         for (const match of matches) {
           try {
-            dependencyPair[0] = await findActualFilePath(match);
+            await findActualFilePath(match);
+            dependencyPair[0] = match;
             break;
           } catch {}
         }
@@ -374,27 +428,31 @@ const readForDependencies = async (ast, pathResolvers) => {
 // ----------------------------------------------------------------
 
 const updateImports = async (
-  rawInputFile,
-  ast,
-  outputDirectory,
-  relativeInputFile,
-  internalSourceFilesMap,
-  dependencyMap,
-  commonRootPath
+  rawInputFile: string,
+  ast: AST,
+  outputDirectory: string,
+  relativeInputFile: string,
+  internalSourceFilesMap: Map<string, InternalSourceFile>,
+  dependencyMap: Map<string, string>
 ) => {
-  const ensure = (dependencyPath) => {
-    dependencyPath = dependencyMap.get(dependencyPath);
+  const ensure = (dependencyPath: string) => {
+    dependencyPath = dependencyMap.get(dependencyPath) ?? dependencyPath;
 
     if (dependencyPath.startsWith(".") || dependencyPath.startsWith("/")) {
-      console.log(
-        path.resolve(path.join(commonRootPath, relativeInputFile, ".."), dependencyPath)
-      );
+      // convert absolute to relative
+      if (dependencyPath.startsWith("/")) {
+        let relativePath = path.relative(path.join(rawInputFile, ".."), dependencyPath);
+        if (!relativePath.startsWith(".")) relativePath = "./" + relativePath;
+        dependencyPath = relativePath + (dependencyPath.endsWith("/") ? "/" : "");
+      }
+
       let internalSourceFile;
       {
         const lastIndexOfSlash = relativeInputFile.lastIndexOf("/");
         const pathWithoutSlash =
           lastIndexOfSlash === -1 ? "" : relativeInputFile.slice(0, lastIndexOfSlash);
         // both joins path and removes trailing slash
+
         const joinedPath = path.join(pathWithoutSlash, dependencyPath, ".");
 
         if (dependencyPath.endsWith("/")) {
@@ -441,9 +499,9 @@ const updateImports = async (
     return dependencyPath;
   };
 
-  const promises = [];
+  const promises: Array<Promise<void>> = [];
 
-  traverse(ast, async (node) => {
+  traverse(ast, async (node: Node) => {
     switch (node.type) {
       case "ImportExpression":
         if (node.source) {
@@ -481,11 +539,19 @@ const updateImports = async (
       case "ImportDeclaration":
         if (node.importKind === "type") break;
         if (node.source && node.source.value) {
-          const defaultImport = node.specifiers.find((node) => !node.imported)?.local
-            ?.name;
+          const defaultImport = node.specifiers.find((node: Node) => !node.imported)
+            ?.local?.name;
           const namedImports = node.specifiers
-            .filter((node) => node.imported)
-            .map(({ local, imported }) => [imported.name, local.name]);
+            .filter((node: Node) => node.imported)
+            .map(
+              ({
+                local,
+                imported,
+              }: {
+                local: { name: string };
+                imported: { name: string };
+              }) => [imported.name, local.name]
+            );
           const value = ensure(node.source.value);
           const isExternalDependency = !(
             value.startsWith(".") ||
@@ -494,16 +560,13 @@ const updateImports = async (
           );
 
           if (namedImports.length > 0 && isExternalDependency) {
+            const dependencyEntryFilePath = require.resolve(value, {
+              paths: [rawInputFile],
+            });
+
             promises.push(
-              import.meta
-                .resolve(value, "file://" + rawInputFile)
-                .then((resolvedUrl) => {
-                  return fileURLToPath(resolvedUrl);
-                })
-                .then((dependencyEntryFilePath) => {
-                  return determineModuleTypeFromPath(dependencyEntryFilePath);
-                })
-                .then((dependencyModuleType) => {
+              determineModuleTypeFromPath(dependencyEntryFilePath).then(
+                (dependencyModuleType) => {
                   if (dependencyModuleType === ".cjs") {
                     const index = node.parent.indexOf(node);
 
@@ -517,17 +580,19 @@ const updateImports = async (
                             type: "VariableDeclarator",
                             id: {
                               type: "ObjectPattern",
-                              properties: namedImports.map(([key, value]) => {
-                                return {
-                                  type: "Property",
-                                  key: { type: "Identifier", name: key },
-                                  computed: false,
-                                  value: { type: "Identifier", name: value },
-                                  kind: "init",
-                                  method: false,
-                                  shorthand: true,
-                                };
-                              }),
+                              properties: namedImports.map(
+                                ([key, value]: [string, string]) => {
+                                  return {
+                                    type: "Property",
+                                    key: { type: "Identifier", name: key },
+                                    computed: false,
+                                    value: { type: "Identifier", name: value },
+                                    kind: "init",
+                                    method: false,
+                                    shorthand: true,
+                                  };
+                                }
+                              ),
                             },
                             init: { type: "Identifier", name: uniqueID },
                           },
@@ -544,7 +609,8 @@ const updateImports = async (
                       node.parent.splice(index + 1, 0, cjs);
                     }
                   }
-                })
+                }
+              )
             );
           }
 
@@ -621,7 +687,7 @@ const updateImports = async (
   return generate(ast);
 };
 
-const asLiteral = (value) => {
+const asLiteral = (value: string) => {
   return {
     type: "Literal",
     value,
@@ -629,7 +695,7 @@ const asLiteral = (value) => {
   };
 };
 
-const isRequire = (node) => {
+const isRequire = (node: Node) => {
   if (!node) return false;
 
   const c = node.callee;
@@ -640,18 +706,18 @@ const isRequire = (node) => {
 };
 
 const BUILTINS = new Set(builtinModules);
-const isNodeBuiltin = (dependency) => {
+const isNodeBuiltin = (dependency: string): boolean => {
   if (dependency.startsWith("node:")) return true;
   if (dependency === "test") return false;
   return BUILTINS.has(dependency);
 };
 
-const traverse = (node, perNode) => {
+const traverse = (node: Node, perNode: (node: Node) => void) => {
   if (Array.isArray(node)) {
     for (const key of node) {
       if (isObject(key)) {
         key.parent = node;
-        traverse(key, perNode);
+        traverse(key as Node, perNode);
       }
     }
   } else if (node && isObject(node)) {
@@ -667,16 +733,16 @@ const traverse = (node, perNode) => {
   }
 };
 
-const isObject = (value) => {
+const isObject = (value: unknown): value is Record<string, unknown> => {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 };
 
 // -------------------------------------------------------------
 
-const determineModuleTypeFromAST = async (ast) => {
+const determineModuleTypeFromAST = async (ast: AST) => {
   let hasFoundExport = false;
 
-  const traverse = (node, perNode) => {
+  const traverse = (node: Node, perNode: (input: Node) => void) => {
     if (hasFoundExport) return;
 
     if (Array.isArray(node)) {
@@ -699,7 +765,7 @@ const determineModuleTypeFromAST = async (ast) => {
     }
   };
 
-  traverse(ast, async (node) => {
+  traverse(ast, async (node: Node) => {
     switch (node.type) {
       case "ExportAllDeclaration":
       case "ExportDefaultDeclaration":
@@ -721,7 +787,9 @@ const determineModuleTypeFromAST = async (ast) => {
   return hasFoundExport ? ".mjs" : ".cjs";
 };
 
-const determineModuleTypeFromPath = async (dependencyEntryFilePath) => {
+const determineModuleTypeFromPath = async (
+  dependencyEntryFilePath: string
+): Promise<".cjs" | ".mjs"> => {
   const lowercaseExtension = dependencyEntryFilePath.toLowerCase().slice(-4);
   if (lowercaseExtension === ".cjs" || lowercaseExtension === ".mjs") {
     return lowercaseExtension;
@@ -736,7 +804,7 @@ const determineModuleTypeFromPath = async (dependencyEntryFilePath) => {
 const tsconfigCache = new Map();
 const resolverCache = new Map();
 
-const getPathResolvers = (filePath) => {
+const getResolveData = (filePath: string): ResolveData => {
   const dirname = path.join(filePath, "..");
   const ext = path.extname(filePath);
   let tsconfig = tsconfigCache.get(dirname);
@@ -748,11 +816,10 @@ const getPathResolvers = (filePath) => {
   }
   if (tsconfig === null) {
     return {
-      baseUrl,
+      baseUrl: null,
       dirname,
       configPath: null,
       matcher: null,
-      baseUrl: null,
       paths: {},
       ext,
     };

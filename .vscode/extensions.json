@@ -1,0 +1,11 @@
+{
+  "recommendations": [
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "EditorConfig.EditorConfig",
+    "TabNine.tabnine-vscode",
+    "bradlc.vscode-tailwindcss",
+    "wraith13.unsaved-files-vscode",
+    "naumovs.color-highlight"
+  ]
+}
