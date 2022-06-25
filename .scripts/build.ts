@@ -2,7 +2,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fork } from "node:child_process";
-import { build } from "esbuild";
 import { parse } from "./deps/jsonc";
 import { rimraf } from "./deps/rimraf";
 import { getPackageRoot } from "./deps/package";
@@ -46,47 +45,20 @@ const main = async () => {
 
   await rimraf(path.join(projectRoot, "dist"));
 
-  if (SHOULD_BUILD_CLI) {
-    await Promise.all([
-      build({
-        entryPoints: ["./cli/build.ts"],
-        minify: true,
-        bundle: true,
-        outfile: "./dist/xnrb",
-        platform: "node",
-        target: "es2017",
-        logLevel: "info",
-      }),
-      build({
-        entryPoints: ["./cli/run.ts"],
-        minify: true,
-        bundle: true,
-        outfile: "./dist/xnr",
-        platform: "node",
-        target: "es2017",
-        logLevel: "info",
-      }),
-    ]);
-    await fs.chmod("./dist/xnrb", 0o755);
-    await fs.chmod("./dist/xnrb", 0o755);
-  }
-
   if (SHOULD_BUILD_LIB) {
     await tsc({
       ...tsConfig,
       compilerOptions: {
         ...tsConfig.compilerOptions,
-        outDir: "dist/cjs",
-        module: "CommonJS",
-        moduleResolution: "node",
+        outDir: "dist/esm",
       },
       include: ["lib/**/*"],
     });
 
-    await fs.rm("./dist/esm", { recursive: true, force: true });
-    await fs.mkdir("./dist/esm", { recursive: true });
+    await fs.rm("./dist/cjs", { recursive: true, force: true });
+    await fs.mkdir("./dist/cjs", { recursive: true });
     await fs.writeFile(
-      "./dist/esm/index.d.ts",
+      "./dist/cjs/index.d.ts",
       dedent`
         /**
          * Convert source code from an entry file into a directory of node-friendly esm code
@@ -106,14 +78,57 @@ const main = async () => {
       `
     );
     await fs.writeFile(
-      "./dist/esm/index.mjs",
+      "./dist/cjs/index.cjs",
       dedent`
-        import xnr from "../cjs/index.js";
-
-        export const build = xnr.build;
-        export const run = xnr.run;
+        let xnr = undefined;
+        export const build = async (...args) => {
+          if (xnr === undefined) {
+            xnr = await import("../esm/index.js")
+          }
+          return xnr.build(...args);
+        };
+        export const run = async (...args) => {
+          if (xnr === undefined) {
+            xnr = await import("../esm/index.js")
+          }
+          return xnr.run(...args);
+        };
       `
     );
+  }
+
+  if (SHOULD_BUILD_CLI) {
+    await fs.writeFile(
+      "./dist/xnrb.mjs",
+      `#!/usr/bin/env -S node --experimental-import-meta-resolve --no-warnings
+import { build } from "./esm/index.js";
+const args = process.argv.slice(2);
+if (args.length === 0) {
+  console.log("$> build entryFile.ts [outDir?= .xnr]");
+  process.exit(1);
+} else {
+  const [fileToRun, outputDirectory] = args;
+  build(fileToRun, outputDirectory);
+}
+`
+    );
+    await fs.writeFile(
+      "./dist/xnr.mjs",
+      `#!/usr/bin/env -S node --experimental-import-meta-resolve --no-warnings
+import { run } from "./esm/index.js";
+const args = process.argv.slice(2);
+if (args.length === 0) {
+  console.log("$> run fileToRun.js");
+  process.exit(1);
+} else {
+  const [fileToRun, ...scriptArgs] = args;
+  run(fileToRun, scriptArgs);
+}
+`
+    );
+
+    await fs.chmod("./dist/xnr.mjs", 0o755);
+    await fs.chmod("./dist/xnrb.mjs", 0o755);
   }
 };
 

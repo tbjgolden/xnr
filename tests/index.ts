@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { fork } from "node:child_process";
-import { build } from "../dist/cjs/index.js";
+import { build } from "../dist/esm/index.js";
 import path from "node:path/posix";
 import fs from "node:fs";
 import { strict as assert } from "node:assert";

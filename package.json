@@ -3,24 +3,29 @@
   "description": "Easily run any Node.js script (written in any JS/TS syntax) from the CLI.",
   "license": "Apache-2.0",
   "version": "0.3.2",
-  "main": "dist/cjs/index.js",
-  "module": "dist/esm/index.mjs",
-  "types": "dist/cjs/index.d.ts",
+  "main": "dist/esm/index.js",
+  "module": "dist/esm/index.js",
+  "types": "dist/esm/index.d.ts",
+  "type": "module",
+  "exports": {
+    "import": "./dist/esm/index.js",
+    "require": "./dist/cjs/index.cjs"
+  },
   "bin": {
-    "xnr": "./dist/xnr",
-    "xnrb": "./dist/xnrb"
+    "xnr": "./dist/xnr.mjs",
+    "xnrb": "./dist/xnrb.mjs"
   },
   "prettier": {
     "printWidth": 90
   },
   "scripts": {
-    "help": "./prev/xnr ./.scripts/help.ts",
+    "help": "./prev/xnr.mjs ./.scripts/help.ts",
     "help:name": "echo 'Rename npm project'",
-    "name": "./prev/xnr ./.scripts/name.ts",
+    "name": "./prev/xnr.mjs ./.scripts/name.ts",
     "help:build": "echo 'Build npm project'",
-    "build": "./prev/xnr ./.scripts/build.ts",
+    "build": "./prev/xnr.mjs ./.scripts/build.ts",
     "help:test": "echo 'Run tests once'",
-    "test": "npm run build && ./prev/xnr ./tests/index.ts",
+    "test": "npm run build && ./prev/xnr.mjs ./tests/index.ts",
     "help:lint": "echo 'Lint all files, output to stdout'",
     "lint": "eslint lib",
     "help:types": "echo 'Typecheck all TS files, output to stdout'",
@@ -53,7 +58,7 @@
   "dependencies": {
     "astring": "1.8.3",
     "esprima-next": "5.8.3",
-    "get-tsconfig": "4.0.4",
+    "get-tsconfig": "4.0.6",
     "sucrase": "3.21.0"
   }
 }

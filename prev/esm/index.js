@@ -9,37 +9,15 @@ import { transform } from "sucrase";
 import { getTsconfig, createPathsMatcher } from "get-tsconfig";
 const require = createRequire(import.meta.url);
 const { parseModule } = require("esprima-next");
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Node = any;
-type AST = ReturnType<typeof parseModule>;
-type ResolveData = {
-  baseUrl: string | null;
-  dirname: string;
-  configPath: string | null;
-  matcher: ((specifier: string) => string[]) | null;
-  paths: Record<string, Array<string>>;
-  ext: string;
-};
-type InternalSourceFile = {
-  rawInputFile: string;
-  inputFile: string;
-  outputFormat: ".cjs" | ".mjs";
-  outputFilePath: string;
-  dependencyMap: Map<string, string>;
-};
-
 /**
  * Convert source code from an entry file into a directory of node-friendly esm code
  */
 export const build = async (
-  entryFilePath: string,
-  outputDirectory: string | undefined = path.join(process.cwd(), ".xnrb")
-): Promise<string | undefined> => {
+  entryFilePath,
+  outputDirectory = path.join(process.cwd(), ".xnrb")
+) => {
   outputDirectory = path.resolve(outputDirectory);
-
-  const astCache = new Map<string, AST>();
-
+  const astCache = new Map();
   const firstFilePath = path.resolve(process.cwd(), entryFilePath);
   const fileStack = [
     {
@@ -49,26 +27,18 @@ export const build = async (
     },
   ];
   const explored = new Set();
-  const internalSourceFiles: Array<Omit<InternalSourceFile, "outputFilePath">> = [];
+  const internalSourceFiles = [];
   while (fileStack.length > 0) {
-    const { filePath, likelyExtension } = fileStack.pop() as {
-      filePath: string;
-      likelyExtension: string;
-      entryMethod: "entry" | "import" | "require";
-    };
+    const { filePath, likelyExtension } = fileStack.pop();
     if (!explored.has(filePath)) {
       explored.add(filePath);
-
       // 1. find file from filepath, likelyExtension and entryMethod
       const actualFilePath = await findActualFilePath(filePath, likelyExtension);
       // 2. get as input string
       const actualFileString = await fs.promises.readFile(actualFilePath, "utf8");
       // 3. use sucrase to turn it into output string, store for later
       let { code } = transform(actualFileString, {
-        transforms: [
-          "typescript",
-          ...(actualFilePath.endsWith(".ts") ? [] : ["jsx" as const]),
-        ],
+        transforms: ["typescript", ...(actualFilePath.endsWith(".ts") ? [] : ["jsx"])],
         jsxPragma: "React.createClass",
         jsxFragmentPragma: "React.Fragment",
         enableLegacyTypeScriptModuleInterop: false,
@@ -82,7 +52,7 @@ export const build = async (
         code = code.slice(code.indexOf("\n") + 1);
       }
       // #. parse into an ast. cache for later key by filepath
-      const ast: AST = parseModule(code);
+      const ast = parseModule(code);
       astCache.set(filePath, ast);
       // #. find config file if hasn't already found one for this dir
       const pathResolvers = getResolveData(filePath);
@@ -100,7 +70,6 @@ export const build = async (
       for (const [dependency, entryMethod] of dependencies) {
         if (dependency.startsWith(".") || dependency.startsWith("/")) {
           const nextFilePath = path.resolve(actualFilePath, "..", dependency);
-
           fileStack.push({
             filePath: nextFilePath,
             likelyExtension: path.extname(nextFilePath) || likelyExtension,
@@ -117,7 +86,6 @@ export const build = async (
       });
     }
   }
-
   // Find common root directory of all source files
   let commonRootPath = firstFilePath;
   while (commonRootPath !== "/") {
@@ -128,13 +96,10 @@ export const build = async (
     });
     if (areAllFilePathsDescendants) break;
   }
-
   await fs.promises.rm(outputDirectory, { recursive: true, force: true });
   await fs.promises.mkdir(outputDirectory, { recursive: true });
-
   let outputEntryFilePath = "";
-
-  const internalSourceFilesMap = new Map<string, InternalSourceFile>(
+  const internalSourceFilesMap = new Map(
     internalSourceFiles.map(
       ({ rawInputFile, inputFile, outputFormat, dependencyMap }) => {
         let outputPath =
@@ -146,7 +111,6 @@ export const build = async (
         if (outputEntryFilePath === "") {
           outputEntryFilePath = outputFilePath;
         }
-
         return [
           path.relative(
             outputDirectory,
@@ -166,7 +130,6 @@ export const build = async (
       }
     )
   );
-
   await Promise.all(
     [...internalSourceFilesMap.values()].map(
       async ({
@@ -178,13 +141,12 @@ export const build = async (
       }) => {
         const newFile = await updateImports(
           rawInputFile,
-          astCache.get(rawInputFile) as AST,
+          astCache.get(rawInputFile),
           outputDirectory,
           path.relative(commonRootPath, inputFile),
           internalSourceFilesMap,
           dependencyMap
         );
-
         /* Enable require from esm */
         let prelude = "#!/usr/bin/env node\n";
         if (outputFormat === ".mjs" && !newFile.includes("createRequire")) {
@@ -192,7 +154,6 @@ export const build = async (
             "import { createRequire } from 'node:module';\n" +
             "const require = createRequire(import.meta.url);\n";
         }
-
         await fs.promises.mkdir(path.join(outputFilePath, ".."), {
           recursive: true,
         });
@@ -200,20 +161,17 @@ export const build = async (
       }
     )
   );
-
   return outputEntryFilePath === "" ? undefined : outputEntryFilePath;
 };
-
 /**
  * Runs a file, no questions asked (auto-transpiling it and its dependencies as required)
  */
 export const run = async (
-  entryFilePath: string,
-  args: string[] = [],
-  outputDirectory: string | undefined = path.join(process.cwd(), ".xnr")
-): Promise<void> => {
+  entryFilePath,
+  args = [],
+  outputDirectory = path.join(process.cwd(), ".xnr")
+) => {
   const outputEntryFilePath = await build(entryFilePath, outputDirectory);
-
   if (outputEntryFilePath === undefined) {
     throw new Error("No entry file to run");
   } else {
@@ -225,11 +183,9 @@ export const run = async (
     });
   }
 };
-
-const findActualFilePath = async (filePath_: string, likelyExtension = "") => {
+const findActualFilePath = async (filePath_, likelyExtension = "") => {
   const endsWithSlash = filePath_.endsWith("/");
   const filePath = path.join(filePath_, ".");
-
   try {
     const stats = await fs.promises.lstat(filePath);
     if (stats.isFile()) {
@@ -238,7 +194,6 @@ const findActualFilePath = async (filePath_: string, likelyExtension = "") => {
   } catch {
     //
   }
-
   const dirname = path.dirname(filePath);
   const filename = filePath.slice(dirname.length + 1);
   const anyExt = new Set();
@@ -347,13 +302,10 @@ const findActualFilePath = async (filePath_: string, likelyExtension = "") => {
   }
   throw new Error(`Could not resolve ${path.relative(process.cwd(), filePath)}`);
 };
-
 // ----------------------------------------------------------------
-
-const readForDependencies = async (ast: AST, resolveData: ResolveData) => {
-  const dependencies: Array<[string, "import" | "require", string]> = [];
-
-  traverse(ast, (node: Node) => {
+const readForDependencies = async (ast, resolveData) => {
+  const dependencies = [];
+  traverse(ast, (node) => {
     switch (node.type) {
       case "ImportExpression":
         if (node.source && node.source.value) {
@@ -373,7 +325,6 @@ const readForDependencies = async (ast: AST, resolveData: ResolveData) => {
         break;
       case "CallExpression":
         if (!node || !node.arguments || node.arguments.length === 0) break;
-
         if (
           node.callee &&
           node.type === "CallExpression" &&
@@ -413,13 +364,11 @@ const readForDependencies = async (ast: AST, resolveData: ResolveData) => {
             node.arguments[0].value,
           ]);
         }
-
         break;
       default:
       // nothing
     }
   });
-
   // apply resolve logic here
   if (dependencies.length > 0 && resolveData.matcher !== null) {
     for (const dependencyPair of dependencies) {
@@ -437,23 +386,19 @@ const readForDependencies = async (ast: AST, resolveData: ResolveData) => {
       }
     }
   }
-
   return dependencies;
 };
-
 // ----------------------------------------------------------------
-
 const updateImports = async (
-  rawInputFile: string,
-  ast: AST,
-  outputDirectory: string,
-  relativeInputFile: string,
-  internalSourceFilesMap: Map<string, InternalSourceFile>,
-  dependencyMap: Map<string, string>
+  rawInputFile,
+  ast,
+  outputDirectory,
+  relativeInputFile,
+  internalSourceFilesMap,
+  dependencyMap
 ) => {
-  const ensure = (dependencyPath: string) => {
+  const ensure = (dependencyPath) => {
     dependencyPath = dependencyMap.get(dependencyPath) ?? dependencyPath;
-
     if (dependencyPath.startsWith(".") || dependencyPath.startsWith("/")) {
       // convert absolute to relative
       if (dependencyPath.startsWith("/")) {
@@ -461,16 +406,13 @@ const updateImports = async (
         if (!relativePath.startsWith(".")) relativePath = "./" + relativePath;
         dependencyPath = relativePath + (dependencyPath.endsWith("/") ? "/" : "");
       }
-
       let internalSourceFile;
       {
         const lastIndexOfSlash = relativeInputFile.lastIndexOf("/");
         const pathWithoutSlash =
           lastIndexOfSlash === -1 ? "" : relativeInputFile.slice(0, lastIndexOfSlash);
         // both joins path and removes trailing slash
-
         const joinedPath = path.join(pathWithoutSlash, dependencyPath, ".");
-
         if (dependencyPath.endsWith("/")) {
           internalSourceFile = internalSourceFilesMap.get(joinedPath + "/index");
           if (internalSourceFile === undefined) {
@@ -494,30 +436,24 @@ const updateImports = async (
             internalSourceFile = internalSourceFilesMap.get(withoutExt);
           }
         }
-
         if (internalSourceFile === undefined) {
           throw new Error(
             `Could not find a valid import value\nCould not resolve ${joinedPath}[/index.*] from ${relativeInputFile}`
           );
         }
       }
-
       const relativePathToDependency = path.relative(
         path.join(outputDirectory, relativeInputFile, ".."),
         internalSourceFile.outputFilePath
       );
-
       return relativePathToDependency.startsWith(".")
         ? relativePathToDependency
         : `./${relativePathToDependency}`;
     }
-
     return dependencyPath;
   };
-
-  const promises: Array<Promise<void>> = [];
-
-  traverse(ast, async (node: Node) => {
+  const promises = [];
+  traverse(ast, async (node) => {
     switch (node.type) {
       case "ImportExpression":
         if (node.source) {
@@ -555,37 +491,26 @@ const updateImports = async (
       case "ImportDeclaration":
         if (node.importKind === "type") break;
         if (node.source && node.source.value) {
-          const defaultImport = node.specifiers.find((node: Node) => {
+          const defaultImport = node.specifiers.find((node) => {
             return !node.imported;
           })?.local?.name;
           const namedImports = node.specifiers
-            .filter((node: Node) => {
+            .filter((node) => {
               return node.imported;
             })
-            .map(
-              ({
-                local,
-                imported,
-              }: {
-                local: { name: string };
-                imported: { name: string };
-              }) => {
-                return [imported.name, local.name];
-              }
-            );
+            .map(({ local, imported }) => {
+              return [imported.name, local.name];
+            });
           const value = ensure(node.source.value);
           const isExternalDependency = !(
             value.startsWith(".") ||
             value.startsWith("/") ||
             isNodeBuiltin(value)
           );
-
           if (namedImports.length > 0 && isExternalDependency) {
-            let dependencyEntryFilePath: string;
-
+            let dependencyEntryFilePath;
             const importResolve = import.meta.resolve;
             const requireResolve = require.resolve;
-
             if (importResolve) {
               try {
                 const fileUrl = await importResolve(value, rawInputFile);
@@ -606,16 +531,13 @@ const updateImports = async (
             } else {
               throw new Error("xnr was run without --experimental-import-meta-resolve");
             }
-
             promises.push(
               determineModuleTypeFromPath(dependencyEntryFilePath).then(
                 (dependencyModuleType) => {
                   if (dependencyModuleType === ".cjs") {
                     const index = node.parent.indexOf(node);
-
                     if (index !== -1) {
                       const uniqueID = defaultImport ?? `xnr_${randomUUID().slice(-12)}`;
-
                       const cjs = {
                         type: "VariableDeclaration",
                         declarations: [
@@ -623,26 +545,23 @@ const updateImports = async (
                             type: "VariableDeclarator",
                             id: {
                               type: "ObjectPattern",
-                              properties: namedImports.map(
-                                ([key, value]: [string, string]) => {
-                                  return {
-                                    type: "Property",
-                                    key: { type: "Identifier", name: key },
-                                    computed: false,
-                                    value: { type: "Identifier", name: value },
-                                    kind: "init",
-                                    method: false,
-                                    shorthand: true,
-                                  };
-                                }
-                              ),
+                              properties: namedImports.map(([key, value]) => {
+                                return {
+                                  type: "Property",
+                                  key: { type: "Identifier", name: key },
+                                  computed: false,
+                                  value: { type: "Identifier", name: value },
+                                  kind: "init",
+                                  method: false,
+                                  shorthand: true,
+                                };
+                              }),
                             },
                             init: { type: "Identifier", name: uniqueID },
                           },
                         ],
                         kind: "const",
                       };
-
                       node.specifiers = [
                         {
                           type: "ImportDefaultSpecifier",
@@ -656,7 +575,6 @@ const updateImports = async (
               )
             );
           }
-
           node.source = {
             type: "Literal",
             value,
@@ -679,7 +597,6 @@ const updateImports = async (
         if (!isRequire(node) || !node.arguments || node.arguments.length === 0) {
           break;
         }
-
         if (isRequire(node)) {
           if (
             node.arguments[0].type === "Literal" ||
@@ -688,7 +605,6 @@ const updateImports = async (
             const value = ensure(node.arguments[0].value);
             node.arguments[0] = asLiteral(value);
           }
-
           if (node.arguments[0].type === "TemplateLiteral") {
             const value = ensure(node.arguments[0].quasis[0].value.cooked);
             node.arguments[0].quasis = [
@@ -699,7 +615,6 @@ const updateImports = async (
               },
             ];
           }
-
           if (
             node.arguments[0].type === "TaggedTemplateExpression" &&
             node.arguments[0].tag.type === "MemberExpression" &&
@@ -718,54 +633,44 @@ const updateImports = async (
             ];
           }
         }
-
         break;
       default:
       // nothing
     }
   });
-
   await Promise.all(promises);
-
   return generate(ast);
 };
-
-const asLiteral = (value: string) => {
+const asLiteral = (value) => {
   return {
     type: "Literal",
     value,
     raw: value.includes("'") ? `"${value}"` : `'${value}'`,
   };
 };
-
-const isRequire = (node: Node) => {
+const isRequire = (node) => {
   if (!node) return false;
-
   const c = node.callee;
-
   return (
     c && node.type === "CallExpression" && c.type === "Identifier" && c.name === "require"
   );
 };
-
 const BUILTINS = new Set(builtinModules);
-const isNodeBuiltin = (dependency: string): boolean => {
+const isNodeBuiltin = (dependency) => {
   if (dependency.startsWith("node:")) return true;
   if (dependency === "test") return false;
   return BUILTINS.has(dependency);
 };
-
-const traverse = (node: Node, perNode: (node: Node) => void) => {
+const traverse = (node, perNode) => {
   if (Array.isArray(node)) {
     for (const key of node) {
       if (isObject(key)) {
         key.parent = node;
-        traverse(key as Node, perNode);
+        traverse(key, perNode);
       }
     }
   } else if (node && isObject(node)) {
     perNode(node);
-
     for (const [key, value] of Object.entries(node)) {
       if (key === "parent" || !value) continue;
       if (isObject(value)) {
@@ -775,19 +680,14 @@ const traverse = (node: Node, perNode: (node: Node) => void) => {
     }
   }
 };
-
-const isObject = (value: unknown): value is Record<string, unknown> => {
+const isObject = (value) => {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 };
-
 // -------------------------------------------------------------
-
-const determineModuleTypeFromAST = async (ast: AST) => {
+const determineModuleTypeFromAST = async (ast) => {
   let hasFoundExport = false;
-
-  const traverse = (node: Node, perNode: (input: Node) => void) => {
+  const traverse = (node, perNode) => {
     if (hasFoundExport) return;
-
     if (Array.isArray(node)) {
       for (const key of node) {
         if (isObject(key)) {
@@ -797,7 +697,6 @@ const determineModuleTypeFromAST = async (ast: AST) => {
       }
     } else if (node && isObject(node)) {
       perNode(node);
-
       for (const [key, value] of Object.entries(node)) {
         if (key === "parent" || !value) continue;
         if (isObject(value)) {
@@ -807,8 +706,7 @@ const determineModuleTypeFromAST = async (ast: AST) => {
       }
     }
   };
-
-  traverse(ast, async (node: Node) => {
+  traverse(ast, async (node) => {
     switch (node.type) {
       case "ExportAllDeclaration":
       case "ExportDefaultDeclaration":
@@ -826,13 +724,9 @@ const determineModuleTypeFromAST = async (ast: AST) => {
       // note "ImportExpression" not included as import() can appear in cjs
     }
   });
-
   return hasFoundExport ? ".mjs" : ".cjs";
 };
-
-const determineModuleTypeFromPath = async (
-  dependencyEntryFilePath: string
-): Promise<".cjs" | ".mjs"> => {
+const determineModuleTypeFromPath = async (dependencyEntryFilePath) => {
   const lowercaseExtension = dependencyEntryFilePath.toLowerCase().slice(-4);
   if (lowercaseExtension === ".cjs" || lowercaseExtension === ".mjs") {
     return lowercaseExtension;
@@ -841,13 +735,10 @@ const determineModuleTypeFromPath = async (
     return determineModuleTypeFromAST(ast);
   }
 };
-
 // ------
-
 const tsconfigCache = new Map();
 const resolverCache = new Map();
-
-const getResolveData = (filePath: string): ResolveData => {
+const getResolveData = (filePath) => {
   const dirname = path.join(filePath, "..");
   const ext = path.extname(filePath);
   let tsconfig = tsconfigCache.get(dirname);
@@ -883,3 +774,4 @@ const getResolveData = (filePath: string): ResolveData => {
   }
   return resolver;
 };
+//# sourceMappingURL=index.js.map
