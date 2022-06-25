@@ -2,7 +2,7 @@
   "name": "xnr",
   "description": "Easily run any Node.js script (written in any JS/TS syntax) from the CLI.",
   "license": "Apache-2.0",
-  "version": "0.3.2",
+  "version": "0.4.0-beta.0",
   "main": "dist/esm/index.js",
   "module": "dist/esm/index.js",
   "types": "dist/esm/index.d.ts",
