@@ -108,6 +108,7 @@ export const build = async (
           });
         }
       }
+
       // #. push results into array
       internalSourceFiles.push({
         rawInputFile: filePath,
@@ -186,9 +187,10 @@ export const build = async (
         );
 
         /* Enable require from esm */
-        let prelude = "#!/usr/bin/env node\n";
+        let prelude =
+          "#!/usr/bin/env -S node --experimental-import-meta-resolve --no-warnings\n";
         if (outputFormat === ".mjs" && !newFile.includes("createRequire")) {
-          prelude =
+          prelude +=
             "import { createRequire } from 'node:module';\n" +
             "const require = createRequire(import.meta.url);\n";
         }
@@ -581,79 +583,81 @@ const updateImports = async (
           );
 
           if (namedImports.length > 0 && isExternalDependency) {
-            let dependencyEntryFilePath: string;
+            const getDependencyEntryFilePath = async () => {
+              let dependencyEntryFilePath: string;
 
-            const importResolve = import.meta.resolve;
-            const requireResolve = require.resolve;
+              const importResolve = import.meta.resolve;
+              const requireResolve = require.resolve;
 
-            if (importResolve) {
-              try {
-                const fileUrl = await importResolve(value, rawInputFile);
-                dependencyEntryFilePath = fileURLToPath(fileUrl);
-              } catch {
+              if (importResolve) {
                 try {
-                  dependencyEntryFilePath = requireResolve(value, {
-                    paths: [rawInputFile],
-                  });
+                  const fileUrl = await importResolve(value, rawInputFile);
+                  dependencyEntryFilePath = fileURLToPath(fileUrl);
                 } catch {
-                  throw new Error(
-                    `Could not import/require ${JSON.stringify(
-                      value
-                    )} from ${JSON.stringify(rawInputFile)}`
-                  );
-                }
-              }
-            } else {
-              throw new Error("xnr was run without --experimental-import-meta-resolve");
-            }
-
-            promises.push(
-              determineModuleTypeFromPath(dependencyEntryFilePath).then(
-                (dependencyModuleType) => {
-                  if (dependencyModuleType === ".cjs") {
-                    const index = node.parent.indexOf(node);
-
-                    if (index !== -1) {
-                      const uniqueID = defaultImport ?? `xnr_${randomUUID().slice(-12)}`;
-
-                      const cjs = {
-                        type: "VariableDeclaration",
-                        declarations: [
-                          {
-                            type: "VariableDeclarator",
-                            id: {
-                              type: "ObjectPattern",
-                              properties: namedImports.map(
-                                ([key, value]: [string, string]) => {
-                                  return {
-                                    type: "Property",
-                                    key: { type: "Identifier", name: key },
-                                    computed: false,
-                                    value: { type: "Identifier", name: value },
-                                    kind: "init",
-                                    method: false,
-                                    shorthand: true,
-                                  };
-                                }
-                              ),
-                            },
-                            init: { type: "Identifier", name: uniqueID },
-                          },
-                        ],
-                        kind: "const",
-                      };
-
-                      node.specifiers = [
-                        {
-                          type: "ImportDefaultSpecifier",
-                          local: { type: "Identifier", name: uniqueID },
-                        },
-                      ];
-                      node.parent.splice(index + 1, 0, cjs);
-                    }
+                  try {
+                    dependencyEntryFilePath = requireResolve(value, {
+                      paths: [rawInputFile],
+                    });
+                  } catch {
+                    throw new Error(
+                      `Could not import/require ${JSON.stringify(
+                        value
+                      )} from ${JSON.stringify(rawInputFile)}`
+                    );
                   }
                 }
-              )
+              } else {
+                throw new Error("xnr was run without --experimental-import-meta-resolve");
+              }
+
+              return dependencyEntryFilePath;
+            };
+
+            promises.push(
+              getDependencyEntryFilePath()
+                .then((dependencyEntryFilePath) => {
+                  return determineModuleTypeFromPath(dependencyEntryFilePath);
+                })
+                .then((dependencyModuleType) => {
+                  if (dependencyModuleType === ".cjs") {
+                    const uniqueID = defaultImport ?? `xnr_${randomUUID().slice(-12)}`;
+
+                    const cjs = {
+                      type: "VariableDeclaration",
+                      declarations: [
+                        {
+                          type: "VariableDeclarator",
+                          id: {
+                            type: "ObjectPattern",
+                            properties: namedImports.map(
+                              ([key, value]: [string, string]) => {
+                                return {
+                                  type: "Property",
+                                  key: { type: "Identifier", name: key },
+                                  computed: false,
+                                  value: { type: "Identifier", name: value },
+                                  kind: "init",
+                                  method: false,
+                                  shorthand: true,
+                                };
+                              }
+                            ),
+                          },
+                          init: { type: "Identifier", name: uniqueID },
+                        },
+                      ],
+                      kind: "const",
+                    };
+
+                    node.specifiers = [
+                      {
+                        type: "ImportDefaultSpecifier",
+                        local: { type: "Identifier", name: uniqueID },
+                      },
+                    ];
+                    node.parent.splice(node.parent.indexOf(node) + 1, 0, cjs);
+                  }
+                })
             );
           }
 
