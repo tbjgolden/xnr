@@ -591,7 +591,7 @@ const updateImports = async (
 
               if (importResolve) {
                 try {
-                  const fileUrl = await importResolve(value, rawInputFile);
+                  const fileUrl = await importResolve(value, "file://" + rawInputFile);
                   dependencyEntryFilePath = fileURLToPath(fileUrl);
                 } catch {
                   try {
