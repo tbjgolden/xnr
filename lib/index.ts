@@ -183,7 +183,8 @@ export const build = async (
           outputDirectory,
           path.relative(commonRootPath, inputFile),
           internalSourceFilesMap,
-          dependencyMap
+          dependencyMap,
+          inputFile
         );
 
         /* Enable require from esm */
@@ -446,12 +447,13 @@ const readForDependencies = async (ast: AST, resolveData: ResolveData) => {
 // ----------------------------------------------------------------
 
 const updateImports = async (
-  rawInputFile: string,
+  rawInputPath: string,
   ast: AST,
   outputDirectory: string,
   relativeInputFile: string,
   internalSourceFilesMap: Map<string, InternalSourceFile>,
-  dependencyMap: Map<string, string>
+  dependencyMap: Map<string, string>,
+  inputFile: string
 ) => {
   const ensure = (dependencyPath: string) => {
     dependencyPath = dependencyMap.get(dependencyPath) ?? dependencyPath;
@@ -459,7 +461,7 @@ const updateImports = async (
     if (dependencyPath.startsWith(".") || dependencyPath.startsWith("/")) {
       // convert absolute to relative
       if (dependencyPath.startsWith("/")) {
-        let relativePath = path.relative(path.join(rawInputFile, ".."), dependencyPath);
+        let relativePath = path.relative(path.join(rawInputPath, ".."), dependencyPath);
         if (!relativePath.startsWith(".")) relativePath = "./" + relativePath;
         dependencyPath = relativePath + (dependencyPath.endsWith("/") ? "/" : "");
       }
@@ -591,18 +593,18 @@ const updateImports = async (
 
               if (importResolve) {
                 try {
-                  const fileUrl = await importResolve(value, "file://" + rawInputFile);
+                  const fileUrl = await importResolve(value, "file://" + inputFile);
                   dependencyEntryFilePath = fileURLToPath(fileUrl);
                 } catch {
                   try {
                     dependencyEntryFilePath = requireResolve(value, {
-                      paths: [rawInputFile],
+                      paths: [inputFile],
                     });
                   } catch {
                     throw new Error(
                       `Could not import/require ${JSON.stringify(
                         value
-                      )} from ${JSON.stringify(rawInputFile)}`
+                      )} from ${JSON.stringify(inputFile)}`
                     );
                   }
                 }

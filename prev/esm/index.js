@@ -145,7 +145,8 @@ export const build = async (
           outputDirectory,
           path.relative(commonRootPath, inputFile),
           internalSourceFilesMap,
-          dependencyMap
+          dependencyMap,
+          inputFile
         );
         /* Enable require from esm */
         let prelude =
@@ -391,19 +392,20 @@ const readForDependencies = async (ast, resolveData) => {
 };
 // ----------------------------------------------------------------
 const updateImports = async (
-  rawInputFile,
+  rawInputPath,
   ast,
   outputDirectory,
   relativeInputFile,
   internalSourceFilesMap,
-  dependencyMap
+  dependencyMap,
+  inputFile
 ) => {
   const ensure = (dependencyPath) => {
     dependencyPath = dependencyMap.get(dependencyPath) ?? dependencyPath;
     if (dependencyPath.startsWith(".") || dependencyPath.startsWith("/")) {
       // convert absolute to relative
       if (dependencyPath.startsWith("/")) {
-        let relativePath = path.relative(path.join(rawInputFile, ".."), dependencyPath);
+        let relativePath = path.relative(path.join(rawInputPath, ".."), dependencyPath);
         if (!relativePath.startsWith(".")) relativePath = "./" + relativePath;
         dependencyPath = relativePath + (dependencyPath.endsWith("/") ? "/" : "");
       }
@@ -515,18 +517,18 @@ const updateImports = async (
               const requireResolve = require.resolve;
               if (importResolve) {
                 try {
-                  const fileUrl = await importResolve(value, "file://" + rawInputFile);
+                  const fileUrl = await importResolve(value, "file://" + inputFile);
                   dependencyEntryFilePath = fileURLToPath(fileUrl);
                 } catch {
                   try {
                     dependencyEntryFilePath = requireResolve(value, {
-                      paths: [rawInputFile],
+                      paths: [inputFile],
                     });
                   } catch {
                     throw new Error(
                       `Could not import/require ${JSON.stringify(
                         value
-                      )} from ${JSON.stringify(rawInputFile)}`
+                      )} from ${JSON.stringify(inputFile)}`
                     );
                   }
                 }
