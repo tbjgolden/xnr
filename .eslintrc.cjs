@@ -29,7 +29,6 @@ module.exports = {
   rules: {
     "arrow-body-style": ["warn", "always"],
     "no-array-constructor": "off",
-    "no-console": "warn",
     "@typescript-eslint/no-unused-vars": [
       "error",
       {

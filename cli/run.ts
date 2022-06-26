@@ -6,5 +6,7 @@ if (args.length === 0) {
   process.exit(1);
 } else {
   const [fileToRun, ...scriptArgs] = args;
-  run(fileToRun, scriptArgs);
+  run(fileToRun, scriptArgs).then((code) => {
+    process.exit(code);
+  });
 }

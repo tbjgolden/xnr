@@ -214,18 +214,35 @@ export const run = async (
   entryFilePath: string,
   args: string[] = [],
   outputDirectory: string | undefined = path.join(process.cwd(), ".xnr")
-): Promise<void> => {
-  const outputEntryFilePath = await build(entryFilePath, outputDirectory);
+): Promise<number> => {
+  const cleanupSync = () => {
+    fs.rmSync(outputDirectory, { recursive: true, force: true });
+  };
 
-  if (outputEntryFilePath === undefined) {
-    throw new Error("No entry file to run");
-  } else {
-    const child = fork(outputEntryFilePath, args, { stdio: "inherit" });
-    child.on("exit", async (code) => {
-      await fs.promises.rm(outputDirectory, { recursive: true, force: true });
-      // eslint-disable-next-line unicorn/no-process-exit
-      process.exit(code ?? 0);
-    });
+  try {
+    const outputEntryFilePath = await build(entryFilePath, outputDirectory);
+    if (outputEntryFilePath === undefined) {
+      cleanupSync();
+      throw new Error("No entry file to run");
+    } else {
+      process.on("SIGINT", cleanupSync); // CTRL+C
+      process.on("SIGQUIT", cleanupSync); // Keyboard quit
+      process.on("SIGTERM", cleanupSync); // `kill` command
+      return new Promise<number>((resolve) => {
+        const child = fork(outputEntryFilePath, args, { stdio: "inherit" });
+        child.on("exit", async (code) => {
+          process.off("SIGINT", cleanupSync); // CTRL+C
+          process.off("SIGQUIT", cleanupSync); // Keyboard quit
+          process.off("SIGTERM", cleanupSync); // `kill` command
+          cleanupSync();
+          resolve(code ?? 0);
+        });
+      });
+    }
+  } catch (error) {
+    cleanupSync();
+    console.error(error);
+    return 1;
   }
 };
 
