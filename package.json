@@ -3,6 +3,7 @@
   "description": "Easily, quickly and reliably run a Node.js script written in TypeScript/JSX from the CLI.",
   "license": "Apache-2.0",
   "version": "1.0.0",
+  "author": "Tom Golden <github@tbjgolden.com> (https://tom.bio)",
   "main": "dist/esm/index.js",
   "module": "dist/esm/index.js",
   "types": "dist/esm/index.d.ts",
@@ -11,6 +12,10 @@
     "node": ">=16.11.0",
     "npm": ">=5.2.0"
   },
+  "files": [
+    "dist",
+    "jest.js"
+  ],
   "exports": {
     "import": "./dist/esm/index.js",
     "require": "./dist/cjs/index.cjs"
@@ -18,9 +23,6 @@
   "bin": {
     "xnr": "./dist/xnr.mjs",
     "xnrb": "./dist/xnrb.mjs"
-  },
-  "prettier": {
-    "printWidth": 100
   },
   "scripts": {
     "build": "./.scripts/xnr/xnr.mjs ./.scripts/build.ts",
@@ -46,14 +48,13 @@
     "prettier": "^2.5.1",
     "typescript": "^4.6.4"
   },
-  "files": [
-    "dist",
-    "jest.js"
-  ],
   "dependencies": {
     "astring": "1.8.3",
     "esprima-next": "5.8.4",
     "get-tsconfig": "4.0.6",
     "sucrase": "3.29.0"
+  },
+  "prettier": {
+    "printWidth": 100
   }
 }
