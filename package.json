@@ -1,12 +1,16 @@
 {
   "name": "xnr",
-  "description": "Easily run any Node.js script (written in any JS/TS syntax) from the CLI.",
+  "description": "Easily, quickly and reliably run a Node.js script written in TypeScript/JSX from the CLI.",
   "license": "Apache-2.0",
-  "version": "0.4.0-beta.2",
+  "version": "1.0.0",
   "main": "dist/esm/index.js",
   "module": "dist/esm/index.js",
   "types": "dist/esm/index.d.ts",
   "type": "module",
+  "engines": {
+    "node": ">=16.11.0",
+    "npm": ">=5.2.0"
+  },
   "exports": {
     "import": "./dist/esm/index.js",
     "require": "./dist/cjs/index.cjs"
@@ -16,21 +20,13 @@
     "xnrb": "./dist/xnrb.mjs"
   },
   "prettier": {
-    "printWidth": 90
+    "printWidth": 100
   },
   "scripts": {
-    "help": "./prev/xnr.mjs ./.scripts/help.ts",
-    "help:name": "echo 'Rename npm project'",
-    "name": "./prev/xnr.mjs ./.scripts/name.ts",
-    "help:build": "echo 'Build npm project'",
-    "build": "./prev/xnr.mjs ./.scripts/build.ts",
-    "help:test": "echo 'Run tests once'",
-    "test": "npm run build && ./prev/xnr.mjs ./tests",
-    "help:lint": "echo 'Lint all files, output to stdout'",
+    "build": "./.scripts/xnr/xnr.mjs ./.scripts/build.ts",
+    "test": "npm run build && ./.scripts/xnr/xnr.mjs ./tests",
     "lint": "eslint lib",
-    "help:types": "echo 'Typecheck all TS files, output to stdout'",
     "types": "tsc --noEmit && echo 'Type-checking passed'",
-    "help:prepare": "echo 'Install (or reinstall) git hooks'",
     "prepare": "husky install && rm -rf .git/hooks && ln -s ../.husky .git/hooks"
   },
   "devDependencies": {
@@ -48,16 +44,16 @@
     "husky": "^7.0.4",
     "lint-staged": "^12.3.5",
     "prettier": "^2.5.1",
-    "semantic-release": "^19.0.2",
     "typescript": "^4.6.4"
   },
   "files": [
-    "dist"
+    "dist",
+    "jest.js"
   ],
   "dependencies": {
     "astring": "1.8.3",
-    "esprima-next": "5.8.3",
+    "esprima-next": "5.8.4",
     "get-tsconfig": "4.0.6",
-    "sucrase": "3.21.0"
+    "sucrase": "3.29.0"
   }
 }

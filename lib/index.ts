@@ -5,7 +5,7 @@ import { builtinModules, createRequire } from "node:module";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { generate } from "astring";
-import { transform } from "sucrase";
+import { transform as sucraseTransform } from "sucrase";
 import { getTsconfig, createPathsMatcher } from "get-tsconfig";
 const require = createRequire(import.meta.url);
 const { parseModule } = require("esprima-next");
@@ -30,11 +30,31 @@ type InternalSourceFile = {
 };
 
 /**
+ * Convert an input code string to a node-friendly esm code string
+ */
+export const transform = async (inputCode: string, filePath?: string): Promise<string> => {
+  let { code } = sucraseTransform(inputCode, {
+    transforms: ["typescript", ...((filePath ?? ".ts").endsWith(".ts") ? [] : ["jsx" as const])],
+    jsxPragma: "React.createClass",
+    jsxFragmentPragma: "React.Fragment",
+    enableLegacyTypeScriptModuleInterop: false,
+    enableLegacyBabel5ModuleInterop: false,
+    filePath,
+    production: false,
+    disableESTransforms: true,
+  });
+  if (code.startsWith("#!")) {
+    code = code.slice(code.indexOf("\n") + 1);
+  }
+  return code;
+};
+
+/**
  * Convert source code from an entry file into a directory of node-friendly esm code
  */
 export const build = async (
   entryFilePath: string,
-  outputDirectory: string | undefined = path.join(process.cwd(), ".xnrb")
+  outputDirectory: string | undefined = path.join(process.cwd(), "dist")
 ): Promise<string | undefined> => {
   outputDirectory = path.resolve(outputDirectory);
 
@@ -58,40 +78,21 @@ export const build = async (
     };
     if (!explored.has(filePath)) {
       explored.add(filePath);
-
-      // 1. find file from filepath, likelyExtension and entryMethod
       const actualFilePath = await findActualFilePath(filePath, likelyExtension);
-      // 2. get as input string
       const actualFileString = await fs.promises.readFile(actualFilePath, "utf8");
-      // 3. use sucrase to turn it into output string, store for later
-      let { code } = transform(actualFileString, {
-        transforms: [
-          "typescript",
-          ...(actualFilePath.endsWith(".ts") ? [] : ["jsx" as const]),
-        ],
-        jsxPragma: "React.createClass",
-        jsxFragmentPragma: "React.Fragment",
-        enableLegacyTypeScriptModuleInterop: false,
-        enableLegacyBabel5ModuleInterop: false,
-        filePath: actualFilePath,
-        production: false,
-        disableESTransforms: true,
-      });
-      // 4. remove hashbang line
-      if (code.startsWith("#!")) {
-        code = code.slice(code.indexOf("\n") + 1);
-      }
-      // #. parse into an ast. cache for later key by filepath
+      // use sucrase to turn it into output string, store for later
+      const code = await transform(actualFileString, actualFilePath);
+      // parse into an ast. cache for later key by filepath
       const ast: AST = parseModule(code);
       astCache.set(filePath, ast);
-      // #. find config file if hasn't already found one for this dir
+      // find config file if hasn't already found one for this dir
       const pathResolvers = getResolveData(filePath);
-      // #. read file for imports/exports/requires
+      // read file for imports/exports/requires
       const dependenciesData = await readForDependencies(ast, pathResolvers);
       const dependencies = dependenciesData.filter(([dependency]) => {
         return !isNodeBuiltin(dependency);
       });
-      // #. filter to internal dependencies
+      // filter to internal dependencies
       const dependencyMap = new Map(
         dependencies.map(([resolved, , original]) => {
           return [original, resolved];
@@ -109,7 +110,6 @@ export const build = async (
         }
       }
 
-      // #. push results into array
       internalSourceFiles.push({
         rawInputFile: filePath,
         inputFile: actualFilePath,
@@ -136,47 +136,34 @@ export const build = async (
   let outputEntryFilePath = "";
 
   const internalSourceFilesMap = new Map<string, InternalSourceFile>(
-    internalSourceFiles.map(
-      ({ rawInputFile, inputFile, outputFormat, dependencyMap }) => {
-        let outputPath =
-          outputDirectory + "/" + inputFile.slice(commonRootPath.length + 1);
-        outputPath =
-          outputPath.slice(0, outputPath.length - path.extname(outputPath).length) +
-          outputFormat;
-        const outputFilePath = path.resolve(outputDirectory, outputPath);
-        if (outputEntryFilePath === "") {
-          outputEntryFilePath = outputFilePath;
-        }
-
-        return [
-          path.relative(
-            outputDirectory,
-            outputFilePath.slice(
-              0,
-              outputFilePath.length - path.extname(outputFilePath).length
-            )
-          ),
-          {
-            rawInputFile,
-            inputFile,
-            outputFormat,
-            outputFilePath,
-            dependencyMap,
-          },
-        ];
+    internalSourceFiles.map(({ rawInputFile, inputFile, outputFormat, dependencyMap }) => {
+      let outputPath = outputDirectory + "/" + inputFile.slice(commonRootPath.length + 1);
+      outputPath =
+        outputPath.slice(0, outputPath.length - path.extname(outputPath).length) + outputFormat;
+      const outputFilePath = path.resolve(outputDirectory, outputPath);
+      if (outputEntryFilePath === "") {
+        outputEntryFilePath = outputFilePath;
       }
-    )
+
+      return [
+        path.relative(
+          outputDirectory,
+          outputFilePath.slice(0, outputFilePath.length - path.extname(outputFilePath).length)
+        ),
+        {
+          rawInputFile,
+          inputFile,
+          outputFormat,
+          outputFilePath,
+          dependencyMap,
+        },
+      ];
+    })
   );
 
   await Promise.all(
     [...internalSourceFilesMap.values()].map(
-      async ({
-        rawInputFile,
-        inputFile,
-        outputFormat,
-        outputFilePath,
-        dependencyMap,
-      }) => {
+      async ({ rawInputFile, inputFile, outputFormat, outputFilePath, dependencyMap }) => {
         const newFile = await updateImports(
           rawInputFile,
           astCache.get(rawInputFile) as AST,
@@ -188,8 +175,7 @@ export const build = async (
         );
 
         /* Enable require from esm */
-        let prelude =
-          "#!/usr/bin/env -S node --experimental-import-meta-resolve --no-warnings\n";
+        let prelude = "#!/usr/bin/env -S node --experimental-import-meta-resolve --no-warnings\n";
         if (outputFormat === ".mjs" && !newFile.includes("createRequire")) {
           prelude +=
             "import { createRequire } from 'node:module';\n" +
@@ -267,10 +253,7 @@ const findActualFilePath = async (filePath_: string, likelyExtension = "") => {
   for (const directoryContent of await fs.promises.readdir(dirname, {
     withFileTypes: true,
   })) {
-    if (
-      directoryContent.name === filename ||
-      directoryContent.name.startsWith(filename + ".")
-    ) {
+    if (directoryContent.name === filename || directoryContent.name.startsWith(filename + ".")) {
       if (directoryContent.isFile()) {
         anyExt.add(directoryContent.name);
       } else if (directoryContent.isDirectory() && directoryContent.name === filename) {
@@ -284,8 +267,7 @@ const findActualFilePath = async (filePath_: string, likelyExtension = "") => {
       withFileTypes: true,
     })) {
       if (
-        (directoryContent.name === "index" ||
-          directoryContent.name.startsWith("index.")) &&
+        (directoryContent.name === "index" || directoryContent.name.startsWith("index.")) &&
         directoryContent.isFile()
       )
         subAnyExt.add(directoryContent.name);
@@ -427,11 +409,7 @@ const readForDependencies = async (ast: AST, resolveData: ResolveData) => {
           node.callee.property.type === "Identifier" &&
           node.callee.property.name === "require"
         ) {
-          dependencies.push([
-            node.arguments[0].value,
-            "require",
-            node.arguments[0].value,
-          ]);
+          dependencies.push([node.arguments[0].value, "require", node.arguments[0].value]);
         }
 
         break;
@@ -498,8 +476,7 @@ const updateImports = async (
             internalSourceFile = internalSourceFilesMap.get(joinedPath);
           }
           const ext = path.extname(joinedPath);
-          const withoutExt =
-            ext.length === 0 ? joinedPath : joinedPath.slice(0, -ext.length);
+          const withoutExt = ext.length === 0 ? joinedPath : joinedPath.slice(0, -ext.length);
           if (internalSourceFile === undefined) {
             internalSourceFile = internalSourceFilesMap.get(withoutExt);
           }
@@ -509,8 +486,7 @@ const updateImports = async (
             internalSourceFile = internalSourceFilesMap.get(joinedPath + "/index");
           }
           const ext = path.extname(joinedPath);
-          const withoutExt =
-            ext.length === 0 ? joinedPath : joinedPath.slice(0, -ext.length);
+          const withoutExt = ext.length === 0 ? joinedPath : joinedPath.slice(0, -ext.length);
           if (internalSourceFile === undefined) {
             internalSourceFile = internalSourceFilesMap.get(withoutExt);
           }
@@ -583,17 +559,9 @@ const updateImports = async (
             .filter((node: Node) => {
               return node.imported;
             })
-            .map(
-              ({
-                local,
-                imported,
-              }: {
-                local: { name: string };
-                imported: { name: string };
-              }) => {
-                return [imported.name, local.name];
-              }
-            );
+            .map(({ local, imported }: { local: { name: string }; imported: { name: string } }) => {
+              return [imported.name, local.name];
+            });
           const value = ensure(node.source.value);
           const isExternalDependency = !(
             value.startsWith(".") ||
@@ -619,9 +587,9 @@ const updateImports = async (
                     });
                   } catch {
                     throw new Error(
-                      `Could not import/require ${JSON.stringify(
-                        value
-                      )} from ${JSON.stringify(inputFile)}`
+                      `Could not import/require ${JSON.stringify(value)} from ${JSON.stringify(
+                        inputFile
+                      )}`
                     );
                   }
                 }
@@ -648,19 +616,17 @@ const updateImports = async (
                           type: "VariableDeclarator",
                           id: {
                             type: "ObjectPattern",
-                            properties: namedImports.map(
-                              ([key, value]: [string, string]) => {
-                                return {
-                                  type: "Property",
-                                  key: { type: "Identifier", name: key },
-                                  computed: false,
-                                  value: { type: "Identifier", name: value },
-                                  kind: "init",
-                                  method: false,
-                                  shorthand: true,
-                                };
-                              }
-                            ),
+                            properties: namedImports.map(([key, value]: [string, string]) => {
+                              return {
+                                type: "Property",
+                                key: { type: "Identifier", name: key },
+                                computed: false,
+                                value: { type: "Identifier", name: value },
+                                kind: "init",
+                                method: false,
+                                shorthand: key === value,
+                              };
+                            }),
                           },
                           init: { type: "Identifier", name: uniqueID },
                         },
@@ -704,10 +670,7 @@ const updateImports = async (
         }
 
         if (isRequire(node)) {
-          if (
-            node.arguments[0].type === "Literal" ||
-            node.arguments[0].type === "StringLiteral"
-          ) {
+          if (node.arguments[0].type === "Literal" || node.arguments[0].type === "StringLiteral") {
             const value = ensure(node.arguments[0].value);
             node.arguments[0] = asLiteral(value);
           }
@@ -766,9 +729,7 @@ const isRequire = (node: Node) => {
 
   const c = node.callee;
 
-  return (
-    c && node.type === "CallExpression" && c.type === "Identifier" && c.name === "require"
-  );
+  return c && node.type === "CallExpression" && c.type === "Identifier" && c.name === "require";
 };
 
 const BUILTINS = new Set(builtinModules);

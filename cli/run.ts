@@ -2,7 +2,7 @@
 import { run } from "../lib/index";
 const args = process.argv.slice(2);
 if (args.length === 0) {
-  console.log("$> run fileToRun.js");
+  console.log("$> xnr fileToRun.js");
   process.exit(1);
 } else {
   const [fileToRun, ...scriptArgs] = args;
