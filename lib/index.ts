@@ -5,7 +5,7 @@ import { builtinModules, createRequire } from "node:module";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { generate } from "astring";
-import { transform } from "sucrase";
+import { transform as sucraseTransform } from "sucrase";
 import { getTsconfig, createPathsMatcher } from "get-tsconfig";
 const require = createRequire(import.meta.url);
 const { parseModule } = require("esprima-next");
@@ -27,6 +27,32 @@ type InternalSourceFile = {
   outputFormat: ".cjs" | ".mjs";
   outputFilePath: string;
   dependencyMap: Map<string, string>;
+};
+
+/**
+ * Convert an input code string to a node-friendly esm code string
+ */
+export const transform = async (
+  inputCode: string,
+  filePath?: string
+): Promise<string> => {
+  let { code } = sucraseTransform(inputCode, {
+    transforms: [
+      "typescript",
+      ...((filePath ?? ".ts").endsWith(".ts") ? [] : ["jsx" as const]),
+    ],
+    jsxPragma: "React.createClass",
+    jsxFragmentPragma: "React.Fragment",
+    enableLegacyTypeScriptModuleInterop: false,
+    enableLegacyBabel5ModuleInterop: false,
+    filePath,
+    production: false,
+    disableESTransforms: true,
+  });
+  if (code.startsWith("#!")) {
+    code = code.slice(code.indexOf("\n") + 1);
+  }
+  return code;
 };
 
 /**
@@ -64,23 +90,7 @@ export const build = async (
       // 2. get as input string
       const actualFileString = await fs.promises.readFile(actualFilePath, "utf8");
       // 3. use sucrase to turn it into output string, store for later
-      let { code } = transform(actualFileString, {
-        transforms: [
-          "typescript",
-          ...(actualFilePath.endsWith(".ts") ? [] : ["jsx" as const]),
-        ],
-        jsxPragma: "React.createClass",
-        jsxFragmentPragma: "React.Fragment",
-        enableLegacyTypeScriptModuleInterop: false,
-        enableLegacyBabel5ModuleInterop: false,
-        filePath: actualFilePath,
-        production: false,
-        disableESTransforms: true,
-      });
-      // 4. remove hashbang line
-      if (code.startsWith("#!")) {
-        code = code.slice(code.indexOf("\n") + 1);
-      }
+      const code = await transform(actualFileString, actualFilePath);
       // #. parse into an ast. cache for later key by filepath
       const ast: AST = parseModule(code);
       astCache.set(filePath, ast);

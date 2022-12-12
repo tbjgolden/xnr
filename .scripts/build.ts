@@ -63,6 +63,13 @@ const main = async () => {
       "./dist/cjs/index.d.ts",
       dedent`
         /**
+         * Convert an input code string to a node-friendly esm code string
+         */
+        export declare const transform: (
+          inputCode: string,
+          filePath?: string | undefined
+        ) => Promise<string>;
+        /**
          * Convert source code from an entry file into a directory of node-friendly esm code
          */
         export declare const build: (
@@ -83,6 +90,12 @@ const main = async () => {
       "./dist/cjs/index.cjs",
       dedent`
         let xnr = undefined;
+        export const transform = async (...args) => {
+          if (xnr === undefined) {
+            xnr = await import("../esm/index.js")
+          }
+          return xnr.transform(...args);
+        };
         export const build = async (...args) => {
           if (xnr === undefined) {
             xnr = await import("../esm/index.js")
