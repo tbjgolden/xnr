@@ -74,37 +74,11 @@ const main = async () => {
 
     await fs.rm("./dist/cjs", { recursive: true, force: true });
     await fs.mkdir("./dist/cjs", { recursive: true });
-    await fs.writeFile(
-      "./dist/cjs/index.d.ts",
-      dedent`
-        /**
-         * Convert an input code string to a node-friendly esm code string
-         */
-        export declare const transform: (
-          inputCode: string,
-          filePath?: string | undefined
-        ) => Promise<string>;
-        /**
-         * Convert source code from an entry file into a directory of node-friendly esm code
-         */
-        export declare const build: (
-          entryFilePath: string,
-          outputDirectory?: string | undefined
-        ) => Promise<string | undefined>;
-        /**
-         * Runs a file, no questions asked (auto-transpiling it and its dependencies as required)
-         */
-        export declare const run: (
-          entryFilePath: string,
-          args?: string[],
-          outputDirectory?: string | undefined
-        ) => Promise<void>;
-      `
-    );
+    await fs.writeFile("./dist/cjs/index.d.ts", await fs.readFile("./dist/esm/index.d.ts"));
     await fs.writeFile(
       "./dist/cjs/index.cjs",
       dedent`
-        let xnr = undefined;
+        let xnr;
         export const transform = async (...args) => {
           if (xnr === undefined) {
             xnr = await import("../esm/index.js")

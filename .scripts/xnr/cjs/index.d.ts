@@ -19,4 +19,5 @@ export declare const run: (
   entryFilePath: string,
   args?: string[],
   outputDirectory?: string | undefined
-) => Promise<void>;
+) => Promise<number>;
+//# sourceMappingURL=index.d.ts.map
