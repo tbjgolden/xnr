@@ -60,7 +60,7 @@ export const transform = async (
  */
 export const build = async (
   entryFilePath: string,
-  outputDirectory: string | undefined = path.join(process.cwd(), ".xnrb")
+  outputDirectory: string | undefined = path.join(process.cwd(), "dist")
 ): Promise<string | undefined> => {
   outputDirectory = path.resolve(outputDirectory);
 
@@ -84,24 +84,21 @@ export const build = async (
     };
     if (!explored.has(filePath)) {
       explored.add(filePath);
-
-      // 1. find file from filepath, likelyExtension and entryMethod
       const actualFilePath = await findActualFilePath(filePath, likelyExtension);
-      // 2. get as input string
       const actualFileString = await fs.promises.readFile(actualFilePath, "utf8");
-      // 3. use sucrase to turn it into output string, store for later
+      // use sucrase to turn it into output string, store for later
       const code = await transform(actualFileString, actualFilePath);
-      // #. parse into an ast. cache for later key by filepath
+      // parse into an ast. cache for later key by filepath
       const ast: AST = parseModule(code);
       astCache.set(filePath, ast);
-      // #. find config file if hasn't already found one for this dir
+      // find config file if hasn't already found one for this dir
       const pathResolvers = getResolveData(filePath);
-      // #. read file for imports/exports/requires
+      // read file for imports/exports/requires
       const dependenciesData = await readForDependencies(ast, pathResolvers);
       const dependencies = dependenciesData.filter(([dependency]) => {
         return !isNodeBuiltin(dependency);
       });
-      // #. filter to internal dependencies
+      // filter to internal dependencies
       const dependencyMap = new Map(
         dependencies.map(([resolved, , original]) => {
           return [original, resolved];
@@ -119,7 +116,6 @@ export const build = async (
         }
       }
 
-      // #. push results into array
       internalSourceFiles.push({
         rawInputFile: filePath,
         inputFile: actualFilePath,
@@ -667,7 +663,7 @@ const updateImports = async (
                                   value: { type: "Identifier", name: value },
                                   kind: "init",
                                   method: false,
-                                  shorthand: true,
+                                  shorthand: key === value,
                                 };
                               }
                             ),

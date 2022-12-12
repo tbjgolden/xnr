@@ -560,7 +560,7 @@ const updateImports = async (
                                 value: { type: "Identifier", name: value },
                                 kind: "init",
                                 method: false,
-                                shorthand: true,
+                                shorthand: key === value,
                               };
                             }),
                           },
