@@ -1,5 +1,4 @@
 #!/usr/bin/env -S node --experimental-import-meta-resolve --no-warnings
-
 import { run } from "./esm/index.js";
 const args = process.argv.slice(2);
 if (args.length === 0) {
