@@ -5,6 +5,7 @@ import { fork } from "node:child_process";
 import { parse } from "./deps/jsonc";
 import { rimraf } from "./deps/rimraf";
 import { getPackageRoot } from "./deps/package";
+import { transform } from "./xnr/esm/index";
 import dedent from "dedent";
 
 const SHOULD_BUILD_CLI = true;
@@ -17,6 +18,23 @@ type TSConfig = {
   [args: string]: unknown;
 };
 
+const transformCliFile = async (filePath: string): Promise<string> => {
+  // store hashbang
+  let hashbang = "#!/usr/bin/env -S node --experimental-import-meta-resolve --no-warnings";
+  let file = await fs.readFile(filePath, "utf8");
+  if (file.startsWith("#!")) {
+    const index = file.indexOf("\n") + 1;
+    hashbang = file.slice(0, index);
+    file = file.slice(index);
+  }
+  // transform from ts to js
+  file = await transform(file);
+  // redirect lib import
+  file = file.replace("../lib/index", "./esm/index.js");
+  // re-add hashbang
+  return hashbang + "\n" + file;
+};
+
 const main = async () => {
   const projectRoot = await getPackageRoot();
   const fileContent = await fs.readFile(path.join(projectRoot, "tsconfig.json"), "utf8");
@@ -25,10 +43,7 @@ const main = async () => {
   const tsc = async (config: TSConfig) => {
     config.compilerOptions.noEmit = false;
 
-    await fs.writeFile(
-      path.join(projectRoot, "tsconfig.tmp.json"),
-      JSON.stringify(config)
-    );
+    await fs.writeFile(path.join(projectRoot, "tsconfig.tmp.json"), JSON.stringify(config));
 
     return new Promise<void>((resolve, reject) => {
       const child = fork("./node_modules/.bin/tsc", ["--project", "tsconfig.tmp.json"], {
@@ -112,36 +127,35 @@ const main = async () => {
     );
   }
 
-  if (SHOULD_BUILD_CLI) {
-    await fs.writeFile(
-      "./dist/xnrb.mjs",
-      `#!/usr/bin/env -S node --experimental-import-meta-resolve --no-warnings
-import { build } from "./esm/index.js";
-const args = process.argv.slice(2);
-if (args.length === 0) {
-  console.log("$> build entryFile.ts [outDir?= .xnr]");
-  process.exit(1);
-} else {
-  const [fileToRun, outputDirectory] = args;
-  build(fileToRun, outputDirectory);
-}
-`
-    );
-    await fs.writeFile(
-      "./dist/xnr.mjs",
-      `#!/usr/bin/env -S node --experimental-import-meta-resolve --no-warnings
-import { run } from "./esm/index.js";
-const args = process.argv.slice(2);
-if (args.length === 0) {
-  console.log("$> run fileToRun.js");
-  process.exit(1);
-} else {
-  const [fileToRun, ...scriptArgs] = args;
-  run(fileToRun, scriptArgs);
-}
-`
-    );
+  await fs.writeFile(
+    "./jest.js",
+    dedent`
+      import { transform } from "./dist/esm/index.js";
 
+      /**
+       * @type {import('@jest/transform').Transformer}
+       */
+      const transformer = {
+        canInstrument: false,
+        process: (inputCode) => {
+          return {
+            code: inputCode,
+          };
+        },
+        processAsync: async (inputCode, filePath) => {
+          return {
+            code: await transform(inputCode, filePath),
+          };
+        },
+      };
+
+      export default transformer;
+    `
+  );
+
+  if (SHOULD_BUILD_CLI) {
+    await fs.writeFile("./dist/xnrb.mjs", await transformCliFile("./cli/build.ts"));
+    await fs.writeFile("./dist/xnr.mjs", await transformCliFile("./cli/run.ts"));
     await fs.chmod("./dist/xnr.mjs", 0o755);
     await fs.chmod("./dist/xnrb.mjs", 0o755);
   }

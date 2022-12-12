@@ -2,7 +2,7 @@
   "name": "xnr",
   "description": "Easily run any TypeScript Node.js script (written in any JS/TS syntax) from the CLI.",
   "license": "Apache-2.0",
-  "version": "1.0.0-beta.1",
+  "version": "1.0.0",
   "main": "dist/esm/index.js",
   "module": "dist/esm/index.js",
   "types": "dist/esm/index.d.ts",
@@ -20,10 +20,9 @@
     "xnrb": "./dist/xnrb.mjs"
   },
   "prettier": {
-    "printWidth": 90
+    "printWidth": 100
   },
   "scripts": {
-    "name": "./.scripts/xnr/xnr.mjs ./.scripts/name.ts",
     "build": "./.scripts/xnr/xnr.mjs ./.scripts/build.ts",
     "test": "npm run build && ./.scripts/xnr/xnr.mjs ./tests",
     "lint": "eslint lib",
@@ -48,7 +47,8 @@
     "typescript": "^4.6.4"
   },
   "files": [
-    "dist"
+    "dist",
+    "jest.js"
   ],
   "dependencies": {
     "astring": "1.8.3",

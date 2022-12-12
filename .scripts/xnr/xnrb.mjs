@@ -2,7 +2,7 @@
 import { build } from "./esm/index.js";
 const args = process.argv.slice(2);
 if (args.length === 0) {
-  console.log("$> build entryFile.ts [outDir?= .xnr]");
+  console.log("$> xnrb entryFile.ts [outDir?= dist]");
   process.exit(1);
 } else {
   const [fileToRun, outputDirectory] = args;

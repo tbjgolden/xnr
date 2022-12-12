@@ -54,10 +54,7 @@ const main = async () => {
   try {
     await test("single", JSON.stringify({ hello: "world" }));
     await test("default-export", "");
-    await test(
-      "import-all",
-      new Array(6).fill(JSON.stringify({ hello: "world" })).join("\n")
-    );
+    await test("import-all", new Array(6).fill(JSON.stringify({ hello: "world" })).join("\n"));
     await test(
       "resolve",
       `z.ts z.z.ts z/index.ts z.z/index.ts z/index.ts z.z/index.ts z.ts z.z.ts z/index.ts z.z/index.ts z.ts z.z.ts`
@@ -75,10 +72,7 @@ const main = async () => {
       `z.ts z.z.ts z/index.ts z.z/index.ts z/index.ts z.z/index.ts`.split(" ").join("\n")
     );
 
-    await runNodeScript(
-      path.join(process.cwd(), "tests/resolve/mjs.mjs"),
-      "xnr-test-dir"
-    );
+    await runNodeScript(path.join(process.cwd(), "tests/resolve/mjs.mjs"), "xnr-test-dir");
     successCount += 1;
 
     const output = await transform(dedent`

@@ -32,15 +32,9 @@ type InternalSourceFile = {
 /**
  * Convert an input code string to a node-friendly esm code string
  */
-export const transform = async (
-  inputCode: string,
-  filePath?: string
-): Promise<string> => {
+export const transform = async (inputCode: string, filePath?: string): Promise<string> => {
   let { code } = sucraseTransform(inputCode, {
-    transforms: [
-      "typescript",
-      ...((filePath ?? ".ts").endsWith(".ts") ? [] : ["jsx" as const]),
-    ],
+    transforms: ["typescript", ...((filePath ?? ".ts").endsWith(".ts") ? [] : ["jsx" as const])],
     jsxPragma: "React.createClass",
     jsxFragmentPragma: "React.Fragment",
     enableLegacyTypeScriptModuleInterop: false,
@@ -142,47 +136,34 @@ export const build = async (
   let outputEntryFilePath = "";
 
   const internalSourceFilesMap = new Map<string, InternalSourceFile>(
-    internalSourceFiles.map(
-      ({ rawInputFile, inputFile, outputFormat, dependencyMap }) => {
-        let outputPath =
-          outputDirectory + "/" + inputFile.slice(commonRootPath.length + 1);
-        outputPath =
-          outputPath.slice(0, outputPath.length - path.extname(outputPath).length) +
-          outputFormat;
-        const outputFilePath = path.resolve(outputDirectory, outputPath);
-        if (outputEntryFilePath === "") {
-          outputEntryFilePath = outputFilePath;
-        }
-
-        return [
-          path.relative(
-            outputDirectory,
-            outputFilePath.slice(
-              0,
-              outputFilePath.length - path.extname(outputFilePath).length
-            )
-          ),
-          {
-            rawInputFile,
-            inputFile,
-            outputFormat,
-            outputFilePath,
-            dependencyMap,
-          },
-        ];
+    internalSourceFiles.map(({ rawInputFile, inputFile, outputFormat, dependencyMap }) => {
+      let outputPath = outputDirectory + "/" + inputFile.slice(commonRootPath.length + 1);
+      outputPath =
+        outputPath.slice(0, outputPath.length - path.extname(outputPath).length) + outputFormat;
+      const outputFilePath = path.resolve(outputDirectory, outputPath);
+      if (outputEntryFilePath === "") {
+        outputEntryFilePath = outputFilePath;
       }
-    )
+
+      return [
+        path.relative(
+          outputDirectory,
+          outputFilePath.slice(0, outputFilePath.length - path.extname(outputFilePath).length)
+        ),
+        {
+          rawInputFile,
+          inputFile,
+          outputFormat,
+          outputFilePath,
+          dependencyMap,
+        },
+      ];
+    })
   );
 
   await Promise.all(
     [...internalSourceFilesMap.values()].map(
-      async ({
-        rawInputFile,
-        inputFile,
-        outputFormat,
-        outputFilePath,
-        dependencyMap,
-      }) => {
+      async ({ rawInputFile, inputFile, outputFormat, outputFilePath, dependencyMap }) => {
         const newFile = await updateImports(
           rawInputFile,
           astCache.get(rawInputFile) as AST,
@@ -194,8 +175,7 @@ export const build = async (
         );
 
         /* Enable require from esm */
-        let prelude =
-          "#!/usr/bin/env -S node --experimental-import-meta-resolve --no-warnings\n";
+        let prelude = "#!/usr/bin/env -S node --experimental-import-meta-resolve --no-warnings\n";
         if (outputFormat === ".mjs" && !newFile.includes("createRequire")) {
           prelude +=
             "import { createRequire } from 'node:module';\n" +
@@ -273,10 +253,7 @@ const findActualFilePath = async (filePath_: string, likelyExtension = "") => {
   for (const directoryContent of await fs.promises.readdir(dirname, {
     withFileTypes: true,
   })) {
-    if (
-      directoryContent.name === filename ||
-      directoryContent.name.startsWith(filename + ".")
-    ) {
+    if (directoryContent.name === filename || directoryContent.name.startsWith(filename + ".")) {
       if (directoryContent.isFile()) {
         anyExt.add(directoryContent.name);
       } else if (directoryContent.isDirectory() && directoryContent.name === filename) {
@@ -290,8 +267,7 @@ const findActualFilePath = async (filePath_: string, likelyExtension = "") => {
       withFileTypes: true,
     })) {
       if (
-        (directoryContent.name === "index" ||
-          directoryContent.name.startsWith("index.")) &&
+        (directoryContent.name === "index" || directoryContent.name.startsWith("index.")) &&
         directoryContent.isFile()
       )
         subAnyExt.add(directoryContent.name);
@@ -433,11 +409,7 @@ const readForDependencies = async (ast: AST, resolveData: ResolveData) => {
           node.callee.property.type === "Identifier" &&
           node.callee.property.name === "require"
         ) {
-          dependencies.push([
-            node.arguments[0].value,
-            "require",
-            node.arguments[0].value,
-          ]);
+          dependencies.push([node.arguments[0].value, "require", node.arguments[0].value]);
         }
 
         break;
@@ -504,8 +476,7 @@ const updateImports = async (
             internalSourceFile = internalSourceFilesMap.get(joinedPath);
           }
           const ext = path.extname(joinedPath);
-          const withoutExt =
-            ext.length === 0 ? joinedPath : joinedPath.slice(0, -ext.length);
+          const withoutExt = ext.length === 0 ? joinedPath : joinedPath.slice(0, -ext.length);
           if (internalSourceFile === undefined) {
             internalSourceFile = internalSourceFilesMap.get(withoutExt);
           }
@@ -515,8 +486,7 @@ const updateImports = async (
             internalSourceFile = internalSourceFilesMap.get(joinedPath + "/index");
           }
           const ext = path.extname(joinedPath);
-          const withoutExt =
-            ext.length === 0 ? joinedPath : joinedPath.slice(0, -ext.length);
+          const withoutExt = ext.length === 0 ? joinedPath : joinedPath.slice(0, -ext.length);
           if (internalSourceFile === undefined) {
             internalSourceFile = internalSourceFilesMap.get(withoutExt);
           }
@@ -589,17 +559,9 @@ const updateImports = async (
             .filter((node: Node) => {
               return node.imported;
             })
-            .map(
-              ({
-                local,
-                imported,
-              }: {
-                local: { name: string };
-                imported: { name: string };
-              }) => {
-                return [imported.name, local.name];
-              }
-            );
+            .map(({ local, imported }: { local: { name: string }; imported: { name: string } }) => {
+              return [imported.name, local.name];
+            });
           const value = ensure(node.source.value);
           const isExternalDependency = !(
             value.startsWith(".") ||
@@ -625,9 +587,9 @@ const updateImports = async (
                     });
                   } catch {
                     throw new Error(
-                      `Could not import/require ${JSON.stringify(
-                        value
-                      )} from ${JSON.stringify(inputFile)}`
+                      `Could not import/require ${JSON.stringify(value)} from ${JSON.stringify(
+                        inputFile
+                      )}`
                     );
                   }
                 }
@@ -654,19 +616,17 @@ const updateImports = async (
                           type: "VariableDeclarator",
                           id: {
                             type: "ObjectPattern",
-                            properties: namedImports.map(
-                              ([key, value]: [string, string]) => {
-                                return {
-                                  type: "Property",
-                                  key: { type: "Identifier", name: key },
-                                  computed: false,
-                                  value: { type: "Identifier", name: value },
-                                  kind: "init",
-                                  method: false,
-                                  shorthand: key === value,
-                                };
-                              }
-                            ),
+                            properties: namedImports.map(([key, value]: [string, string]) => {
+                              return {
+                                type: "Property",
+                                key: { type: "Identifier", name: key },
+                                computed: false,
+                                value: { type: "Identifier", name: value },
+                                kind: "init",
+                                method: false,
+                                shorthand: key === value,
+                              };
+                            }),
                           },
                           init: { type: "Identifier", name: uniqueID },
                         },
@@ -710,10 +670,7 @@ const updateImports = async (
         }
 
         if (isRequire(node)) {
-          if (
-            node.arguments[0].type === "Literal" ||
-            node.arguments[0].type === "StringLiteral"
-          ) {
+          if (node.arguments[0].type === "Literal" || node.arguments[0].type === "StringLiteral") {
             const value = ensure(node.arguments[0].value);
             node.arguments[0] = asLiteral(value);
           }
@@ -772,9 +729,7 @@ const isRequire = (node: Node) => {
 
   const c = node.callee;
 
-  return (
-    c && node.type === "CallExpression" && c.type === "Identifier" && c.name === "require"
-  );
+  return c && node.type === "CallExpression" && c.type === "Identifier" && c.name === "require";
 };
 
 const BUILTINS = new Set(builtinModules);
