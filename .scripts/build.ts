@@ -23,6 +23,8 @@ const main = async () => {
   const tsConfig = parse<TSConfig>(fileContent);
 
   const tsc = async (config: TSConfig) => {
+    config.compilerOptions.noEmit = false;
+
     await fs.writeFile(
       path.join(projectRoot, "tsconfig.tmp.json"),
       JSON.stringify(config)
