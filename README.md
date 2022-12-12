@@ -1,10 +1,8 @@
-# `xnr` (xtreme node runner)
+# `xnr` xtreme node runner
 
 ![GitHub Workflow Status](https://img.shields.io/github/workflow/status/tbjgolden/xnr/tests) ![npm](https://img.shields.io/npm/v/xnr)
 
-![xtreme](xtreme.jpg)
-
-Easily run any Node.js script (written in any JS/TS syntax) from the CLI.
+Easily, quickly and reliably run a Node.js script written in TypeScript/JSX from the CLI.
 
 ```sh
 npx xnr any-file.{ts,js,mjs,cjs,tsx,jsx,*}
@@ -14,29 +12,14 @@ npx xnr any-file.{ts,js,mjs,cjs,tsx,jsx,*}
 - **fast** &mdash; skips TypeScript type checking
 - **light** &mdash; 4MB including dependencies = faster CI
 - **tolerant** &mdash; makes as few assumptions as possible
-- just performant JavaScript &mdash; no Rust or Golang!
+  - supports tsconfig paths if provided
+  - equally, doesn't need tsconfig
+  - plays nice with rogue npm dependencies that expect one of `require` or `import`
+- just performant\* JavaScript &mdash; no Rust or Golang!
 
-## Comparison to other tools
+> _\* uses [`sucrase`](https://github.com/alangpierce/sucrase) to convert to TypeScript and JSX to JavaScript, and then performs fast AST manipulations to make the interop work - no tsc/babel/esbuild/swc here_
 
-webpack, rollup, swc, esbuild can all be used, but are not designed for runs.
-
-- ts-node
-  - xnr is zero config, ts-node is medium config
-  - xnr is faster
-  - xnr is way lighter
-  - ts-node has issues with esm and cjs interop
-- swc-node
-  - xnr is zero config, swc is low config
-  - xnr is not as fast
-  - xnr is way lighter
-  - swc-node doesn't run dependencies
-- esbuild-runner
-  - xnr is zero config, esbuild-runner is low config
-  - xnr is not as fast
-  - xnr is way lighter
-  - esbuild-runner has issues with esm and cjs interop
-
-Benchmarks
+## Benchmarks (2022-06)
 
 - xnr
   - size: 3.4MB
@@ -58,47 +41,74 @@ Benchmarks
 
 \* using sample config on README
 
+Interop test involves testing whether you can import a filetype from another filetype or not.
+
 ## Getting Started
 
-```sh
-npm install xnr
-```
-
-or for a one-time run
+**Optional: install it**
 
 ```sh
-npx xnr your-file.ts
+npm install --save-dev xnr
 ```
 
-You can also use this project to build!
+**Run it from the CLI**
+
+```ts
+const typedFn = (str: string) => console.log(str);
+typedFn("hello world");
+```
 
 ```sh
-# if xnr is installed
-npx xnrb <your-dir>
+> npx xnr your-file.ts
+hello world
 ```
+
+**Or build now, run later**
+
+```sh
+> npx xnrb your-file.ts your-build-dir
+your-build-dir/your-file.cjs
+
+> node your-build-dir/your-file.cjs
+hello world
+```
+
+> `your-build-dir` will contain all transpiled local dependencies needed to run
 
 ## Requirements
 
-- Node with ES Modules support
-- Not checked or verified on Windows
+- `node` `>=16.11.0`
+- to use npx above `npm` `>=5.2.0`
 
-## API
+Not yet verified on Windows (but help welcome!)
 
-...
+## Node API
+
+```ts
+/**
+ * Convert an input code string to a node-friendly esm code string
+ */
+export declare const transform: (
+  inputCode: string,
+  filePath?: string | undefined
+) => Promise<string>;
+/**
+ * Convert source code from an entry file into a directory of node-friendly esm code
+ */
+export declare const build: (
+  entryFilePath: string,
+  outputDirectory?: string | undefined
+) => Promise<string | undefined>;
+/**
+ * Runs a file, no questions asked (auto-transpiling it and its dependencies as required)
+ */
+export declare const run: (
+  entryFilePath: string,
+  args?: string[],
+  outputDirectory?: string | undefined
+) => Promise<number>;
+```
 
 ## License
 
 Apache-2.0
-
-<!--
-
-Todos before full release:
-
-- [ ] tsconfig.json support
-- [ ] compile - a single raw file str to raw file str
-
-- There must be a nicer way to do this
-  - perhaps build a static [absolute source path x import string] => absolute dest path map
-  - separately a nice relative path resolver
-
--->

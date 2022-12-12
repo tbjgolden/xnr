@@ -1,6 +1,6 @@
 {
   "name": "xnr",
-  "description": "Easily run any TypeScript Node.js script (written in any JS/TS syntax) from the CLI.",
+  "description": "Easily, quickly and reliably run a Node.js script written in TypeScript/JSX from the CLI.",
   "license": "Apache-2.0",
   "version": "1.0.0",
   "main": "dist/esm/index.js",
