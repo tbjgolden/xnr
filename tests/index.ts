@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 import { fork } from "node:child_process";
-import { build } from "../dist/esm/index.js";
+import { build, transform } from "../dist/esm/index.js";
 import path from "node:path/posix";
 import fs from "node:fs";
 import { strict as assert } from "node:assert";
+import dedent from "dedent";
 
 const runNodeScript = async (
   entryFilePath: string,
@@ -78,6 +79,22 @@ const main = async () => {
       path.join(process.cwd(), "tests/resolve/mjs.mjs"),
       "xnr-test-dir"
     );
+    successCount += 1;
+
+    const output = await transform(dedent`
+      export const log = (str: string) => {
+        console.log(str);
+      };
+    `);
+    const expected = dedent`
+      export const log = (str) => {
+        console.log(str);
+      };
+    `;
+    if (output !== expected) {
+      console.log(output, expected);
+      throw new Error("output !== expected");
+    }
     successCount += 1;
   } catch (error) {
     console.error(error);
