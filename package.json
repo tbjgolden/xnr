@@ -2,7 +2,7 @@
   "name": "xnr",
   "description": "Easily, quickly and reliably run a Node.js script written in TypeScript/JSX from the CLI.",
   "license": "Apache-2.0",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": "Tom Golden <github@tbjgolden.com> (https://tom.bio)",
   "main": "dist/esm/index.js",
   "module": "dist/esm/index.js",
