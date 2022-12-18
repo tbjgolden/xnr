@@ -8,6 +8,7 @@ Easily, quickly and reliably run a Node.js script written in TypeScript/JSX from
 npx xnr any-file.{ts,js,mjs,cjs,tsx,jsx,*}
 ```
 
+- **can handle local dependencies** &mdash; will transpile anything needed to run the file
 - **zero config** &mdash; it should just work - but if it doesn't work, leave an issue!
 - **fast** &mdash; skips TypeScript type checking
 - **light** &mdash; 4MB including dependencies = faster CI
@@ -78,7 +79,7 @@ hello world
 
 ## Requirements
 
-- `node` `>=16.11.0`
+- `node` `>=16.14.0`
 - to use npx above `npm` `>=5.2.0`
 
 Not yet verified on Windows (but help welcome!)
