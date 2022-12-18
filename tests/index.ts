@@ -72,7 +72,13 @@ const main = async () => {
       `z.ts z.z.ts z/index.ts z.z/index.ts z/index.ts z.z/index.ts`.split(" ").join("\n")
     );
 
-    await runNodeScript(path.join(process.cwd(), "tests/resolve/mjs.mjs"), "xnr-test-dir");
+    await runNodeScript(path.join(process.cwd(), "tests/import-dot/index.test.ts"));
+    successCount += 1;
+
+    await runNodeScript(path.join(process.cwd(), "tests/import-dot-index/index.test.ts"));
+    successCount += 1;
+
+    await runNodeScript(path.join(process.cwd(), "tests/resolve/mjs.mjs"));
     successCount += 1;
 
     const output = await transform(dedent`

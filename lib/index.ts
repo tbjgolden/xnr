@@ -470,7 +470,9 @@ const updateImports = async (
 
         const joinedPath = path.join(pathWithoutSlash, dependencyPath, ".");
 
-        if (dependencyPath.endsWith("/")) {
+        if (joinedPath === ".") {
+          internalSourceFile = internalSourceFilesMap.get("index");
+        } else if (dependencyPath.endsWith("/")) {
           internalSourceFile = internalSourceFilesMap.get(joinedPath + "/index");
           if (internalSourceFile === undefined) {
             internalSourceFile = internalSourceFilesMap.get(joinedPath);
