@@ -66,6 +66,7 @@ hello world
 **Or build now, run later**
 
 ```sh
+# requires xnr to be installed
 > npx xnrb your-file.ts your-build-dir
 your-build-dir/your-file.cjs
 
