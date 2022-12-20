@@ -1,6 +1,6 @@
 # `xnr` xtreme node runner
 
-![GitHub Workflow Status](https://img.shields.io/github/workflow/status/tbjgolden/xnr/tests) ![npm](https://img.shields.io/npm/v/xnr)
+![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/tbjgolden/xnr/tests.yml?branch=main) ![npm](https://img.shields.io/npm/v/xnr)
 
 Easily, quickly and reliably run a Node.js script written in TypeScript/JSX from the CLI.
 
