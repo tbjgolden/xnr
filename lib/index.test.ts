@@ -42,9 +42,29 @@ test("tsconfig support", async () => {
   );
 });
 test("misc old bugs", async () => {
-  await runNodeScript(path.join(process.cwd(), "lib/__fixtures__/import-dot/index.test.ts"));
-  await runNodeScript(path.join(process.cwd(), "lib/__fixtures__/import-dot-index/index.test.ts"));
-  await runNodeScript(path.join(process.cwd(), "lib/__fixtures__/resolve/mjs.mjs"));
+  expect(
+    await runNodeScript(path.join(process.cwd(), "lib/__fixtures__/import-dot/index.test.ts"))
+  ).toBe("magic");
+  expect(
+    await runNodeScript(path.join(process.cwd(), "lib/__fixtures__/import-dot-index/index.test.ts"))
+  ).toBe("magic");
+  expect(await runNodeScript(path.join(process.cwd(), "lib/__fixtures__/resolve/mjs.mjs"))).toBe(
+    `z.ts
+z.z.ts
+z/index.ts
+z.z/index.ts
+z/index.ts
+z.z/index.ts
+z.ts
+z.z.ts
+z/index.ts
+z.z/index.ts
+z.ts
+z.z.ts`
+  );
+  expect(
+    await runNodeScript(path.join(process.cwd(), "lib/__fixtures__/new-ts-features/index.test.ts"))
+  ).toBe("click click i am lorenzo");
 });
 test("transform", async () => {
   expect(
@@ -65,11 +85,13 @@ test("transform", async () => {
 const runNodeScript = async (
   entryFilePath: string,
   outputDirectory = path.join(process.cwd(), ".xnrb")
-) => {
+): Promise<string> => {
   const absoluteEntryFilePath = path.resolve(entryFilePath);
   const outputEntryFilePath = await build(absoluteEntryFilePath, outputDirectory);
-  if (outputEntryFilePath !== undefined) {
-    return new Promise((resolve) => {
+  if (outputEntryFilePath === undefined) {
+    throw new Error("outputEntryFilePath is undefined");
+  } else {
+    return new Promise<string>((resolve) => {
       const child = fork(outputEntryFilePath, [], { stdio: "pipe" });
       let stdout = "";
       child.stdout?.on("data", (data) => {

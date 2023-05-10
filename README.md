@@ -7,10 +7,10 @@
 ![license](https://img.shields.io/npm/l/xnr)
 [![install size](https://packagephobia.com/badge?p=xnr)](https://packagephobia.com/result?p=xnr)
 
-Easily, quickly and reliably run a Node.js script written in TypeScript/JSX from the CLI.
+Easily, quickly and reliably run a Node.js script written in TypeScript from the CLI.
 
 ```sh
-npx xnr any-file.{ts,js,mjs,cjs,tsx,jsx,*}
+npx xnr any-file.{ts,js,mjs,cjs,*}
 ```
 
 - **can handle local dependencies** &mdash; will transpile anything needed to run the file
@@ -23,7 +23,7 @@ npx xnr any-file.{ts,js,mjs,cjs,tsx,jsx,*}
   - plays nice with rogue npm dependencies that expect one of `require` or `import`
 - just performant\* JavaScript &mdash; no Rust or Golang!
 
-> _\* uses [`sucrase`](https://github.com/alangpierce/sucrase) to convert to TypeScript and JSX to
+> _\* uses [`sucrase`](https://github.com/alangpierce/sucrase) to convert to TypeScript to
 > JavaScript, and then performs fast AST manipulations to make the interop work - no
 > tsc/babel/esbuild/swc here_
 

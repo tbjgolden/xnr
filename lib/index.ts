@@ -41,7 +41,7 @@ export const transform = async (inputCode: string, filePath?: string): Promise<s
     enableLegacyBabel5ModuleInterop: false,
     filePath,
     production: false,
-    disableESTransforms: true,
+    disableESTransforms: false,
   });
   if (code.startsWith("#!")) {
     code = code.slice(code.indexOf("\n") + 1);
