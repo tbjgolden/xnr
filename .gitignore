@@ -1,14 +1,13 @@
 logs
 *.log
 npm-debug.log*
-coverage
 node_modules
 .npm
 .*cache
 .temp
 .tmp
-.xnr
-.xnrb
 dist
-jest.js
+.xnr
+/.build.*
+/coverage
 !.scripts

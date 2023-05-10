@@ -1,116 +1,78 @@
-# `xnr` xtreme node runner
-
-![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/tbjgolden/xnr/tests.yml?branch=main) ![npm](https://img.shields.io/npm/v/xnr)
-
-Easily, quickly and reliably run a Node.js script written in TypeScript/JSX from the CLI.
-
 ```sh
-npx xnr any-file.{ts,js,mjs,cjs,tsx,jsx,*}
+git clone https://github.com/tbjgolden/xnr.git cool-package-name
+cd cool-package-name
+npx find-repl xnr cool-package-name
+rm -rf .git
+git init
+npm install
 ```
 
-- **can handle local dependencies** &mdash; will transpile anything needed to run the file
-- **zero config** &mdash; it should just work - but if it doesn't work, leave an issue!
-- **fast** &mdash; skips TypeScript type checking
-- **light** &mdash; 4MB including dependencies = faster CI
-- **tolerant** &mdash; makes as few assumptions as possible
-  - supports tsconfig paths if provided
-  - equally, doesn't need tsconfig
-  - plays nice with rogue npm dependencies that expect one of `require` or `import`
-- just performant\* JavaScript &mdash; no Rust or Golang!
+---
 
-> _\* uses [`sucrase`](https://github.com/alangpierce/sucrase) to convert to TypeScript and JSX to JavaScript, and then performs fast AST manipulations to make the interop work - no tsc/babel/esbuild/swc here_
+# xnr
 
-## Benchmarks (2022-06)
+![banner](banner.svg)
 
-- xnr
-  - size: 3.4MB
-  - speed: 28.3ms/run
-  - passes interop test: 18/18
-- ts-node
-  - size: 70MB
-  - speed: 158.5ms/run
-  - config issues during setup: 1
-  - passes interop test\*: 10/18
-- swc-node
-  - size: 208M
-  - speed: 22.4ms/run
-  - passes interop test: 12/18 (couldn't bundle)
-- esbuild-runner
-  - size: 9.2M
-  - speed: 75.3ms/run
-  - passes interop test: 17/18 (couldn't import ts from mjs)
+![npm](https://img.shields.io/npm/v/xnr)
+![npm type definitions](https://img.shields.io/npm/types/xnr)
+![license](https://img.shields.io/npm/l/xnr)
+[![install size](https://packagephobia.com/badge?p=xnr)](https://packagephobia.com/result?p=xnr)
 
-\* using sample config on README
+A npm library that does exactly what it says on the tin.
 
-Interop test involves testing whether you can import a filetype from another filetype or not.
+## Table of Contents
 
-## Getting Started
+## Background
 
-**Optional: install it**
+- Cover motivation.
+- Cover abstract dependencies.
+- Cover compatible versions of Node, npm and ECMAScript.
+- Cover similar packages and alternatives.
+
+## Install
+
+This package is available from the `npm` registry.
 
 ```sh
-npm install --save-dev xnr
+npm install xnr
 ```
 
-**Run it from the CLI**
+## Usage
+
+```sh
+npx xnr ...
+```
+
+Supports JavaScript + TypeScript:
 
 ```ts
-const typedFn = (str: string) => console.log(str);
-typedFn("hello world");
+import { foo } from "xnr";
+
+foo();
 ```
 
-```sh
-> npx xnr your-file.ts
-hello world
-```
+Can also be imported via `require("xnr")`.
 
-**Or build now, run later**
+## API
 
-```sh
-# requires xnr to be installed
-> npx xnrb your-file.ts your-build-dir
-your-build-dir/your-file.cjs
+...
 
-> node your-build-dir/your-file.cjs
-hello world
-```
+## Credits
 
-> `your-build-dir` will contain all transpiled local dependencies needed to run
+...
 
-## Requirements
+## Contributing
 
-- `node` `>=16.14.0`
-- to use npx above `npm` `>=5.2.0`
+- State where users can ask questions.
+- State whether PRs are accepted.
+- List any requirements for contributing; for instance, having a sign-off on commits.
 
-Not yet verified on Windows (but help welcome!)
+Dev environment requires:
 
-## Node API
+- node >= 16.14.0
+- npm >= 6.8.0
+- git >= 2.11
 
-```ts
-/**
- * Convert an input code string to a node-friendly esm code string
- */
-export declare const transform: (
-  inputCode: string,
-  filePath?: string | undefined
-) => Promise<string>;
-/**
- * Convert source code from an entry file into a directory of node-friendly esm code
- */
-export declare const build: (
-  entryFilePath: string,
-  outputDirectory?: string | undefined
-) => Promise<string | undefined>;
-/**
- * Runs a file, no questions asked (auto-transpiling it and its dependencies as required)
- */
-export declare const run: (
-  entryFilePath: string,
-  args?: string[],
-  outputDirectory?: string | undefined
-) => Promise<number>;
-```
-
-## License
+## Licence
 
 Apache-2.0
