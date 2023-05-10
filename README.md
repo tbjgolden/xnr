@@ -9,7 +9,7 @@
 
 Easily, quickly and reliably run a Node.js script written in TypeScript/JSX from the CLI.
 
-```
+```sh
 npx xnr any-file.{ts,js,mjs,cjs,tsx,jsx,*}
 ```
 
