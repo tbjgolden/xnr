@@ -13,11 +13,14 @@ module.exports = {
     "prettier",
   ],
   plugins: ["@typescript-eslint", "unicorn", "prettier"],
-  ignorePatterns: require("fs")
-    .readFileSync(".gitignore", "utf8")
-    .split("\n")
-    .map((line) => line.split("#")[0].trim())
-    .filter((withoutComment) => withoutComment.length > 0),
+  ignorePatterns: [
+    ...require("node:fs")
+      .readFileSync(".gitignore", "utf8")
+      .split("\n")
+      .map((line) => line.split("#")[0].trim())
+      .filter((withoutComment) => withoutComment.length > 0),
+    "__fixtures__",
+  ],
   rules: {
     "arrow-body-style": "off",
     "no-array-constructor": "off",

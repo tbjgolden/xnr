@@ -3,6 +3,7 @@
     "target": "ES2022",
     "lib": [],
     "module": "NodeNext",
+    "moduleResolution": "node16",
     "resolveJsonModule": true,
     "declaration": true,
     "declarationMap": false,
@@ -15,5 +16,6 @@
     "noEmit": true,
     "outDir": "dist"
   },
-  "include": ["typings.d.ts", "cli/**/*", "lib/**/*"]
+  "include": ["typings.d.ts", "cli/**/*", "lib/**/*"],
+  "exclude": ["lib/**/__fixtures__/**/*"]
 }

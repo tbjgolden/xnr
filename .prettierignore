@@ -1,0 +1,14 @@
+logs
+*.log
+npm-debug.log*
+node_modules
+.npm
+.*cache
+.temp
+.tmp
+dist
+.xnr
+/.build.*
+/coverage
+!.scripts
+__fixtures__

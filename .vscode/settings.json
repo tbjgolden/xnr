@@ -5,7 +5,6 @@
   },
   "prettier.prettierPath": "node_modules/prettier",
   "editor.defaultFormatter": "esbenp.prettier-vscode",
-  "prettier.ignorePath": ".gitignore",
   "explorer.fileNesting.enabled": false,
   "explorer.fileNesting.expand": true,
   "editor.tabSize": 2,
