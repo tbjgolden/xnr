@@ -7,10 +7,10 @@
 ![license](https://img.shields.io/npm/l/xnr)
 [![install size](https://packagephobia.com/badge?p=xnr)](https://packagephobia.com/result?p=xnr)
 
-Easily, quickly and reliably run a Node.js script written in TypeScript from the CLI.
+Easily, quickly and reliably run a Node.js script from the CLI.
 
 ```sh
-npx xnr any-file.{ts,js,mjs,cjs,*}
+npx xnr any-file.{ts,tsx,cts,mts,js,jsx,cjs,mjs}
 ```
 
 - **can handle local dependencies** &mdash; will transpile anything needed to run the file
@@ -50,14 +50,6 @@ npx xnr any-file.{ts,js,mjs,cjs,*}
 \* using sample config on README
 
 Interop test involves testing whether you can import a filetype from another filetype or not.
-
-## Install
-
-This package is available from the `npm` registry.
-
-```sh
-npm install xnr
-```
 
 ## Getting Started
 
@@ -119,19 +111,9 @@ export declare const run: (
 ) => Promise<number>;
 ```
 
-## Contributing
+---
 
-- State where users can ask questions.
-- State whether PRs are accepted.
-- List any requirements for contributing; for instance, having a sign-off on commits.
-
-Dev environment requires:
-
-- node >= 16.14.0
-- npm >= 6.8.0
-- git >= 2.11
-
-Not yet verified on Windows (if you are facing issues on Windows, please leave a bug report!)
+Please leave bug reports if something doesn't work as expected! 😄
 
 ## Licence
 
