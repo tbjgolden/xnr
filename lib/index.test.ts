@@ -21,6 +21,9 @@ test("transpile each filetype containing imports from every filetype", async () 
 test("transpile each filetype containing imports from every filetype", async () => {
   await testBatch("import-all", new Array(6).fill(JSON.stringify({ hello: "world" })).join("\n"));
 });
+test("can import json from every filetype", async () => {
+  await testBatch("import-json", JSON.stringify({ foo: "bar" }));
+});
 test("resolution expected order of priority", async () => {
   await testBatch(
     "resolve",

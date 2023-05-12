@@ -1,5 +1,7 @@
-import z from "_/fixture/z";
-import zdotz from "_/fixture/z.z";
+// @ts-ignore
+import z from "_/fixture/z.ts";
+// @ts-ignore
+import zdotz from "_/fixture/z.z.ts";
 import z_index from "_/fixture/z/index";
 import zdotz_index from "_/fixture/z.z/index";
 import z_ from "_/fixture/z/";
