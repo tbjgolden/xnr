@@ -1,4 +1,5 @@
 import { execSync } from "node:child_process";
+import { rmSync } from "node:fs";
 import { getPackageJson, checkDirectory, isFile, isDirectory } from "./lib/utils";
 
 checkDirectory();
@@ -17,17 +18,46 @@ if (await isDirectory("cli")) {
         console.log(`"${cliName}": "${cliFilePath}" is not an executable file`);
         process.exit(1);
       }
-      const command = `${cliFilePath} arg1 arg2`;
-      const stdout = execSync(`node ${command}`).toString();
-      const expected = `Hello arg1 arg2!\n`;
-      if (stdout !== expected) {
-        console.log(`unexpected response when running: ${command}\n`);
-        console.log("expected:");
-        console.log(JSON.stringify(expected));
-        console.log("actual:");
-        console.log(JSON.stringify(stdout));
-        process.exit(1);
+      if (cliName === "xnr") {
+        const command = `${cliFilePath} ./.scripts/build-tests`;
+        const stdout = execSync(`node ${command}`).toString();
+        const expected = `hello world\n`;
+        if (stdout !== expected) {
+          console.log(`unexpected response when running: ${command}\n`);
+          console.log("expected:");
+          console.log(JSON.stringify(expected));
+          console.log("actual:");
+          console.log(JSON.stringify(stdout));
+          process.exit(1);
+        }
+      } else {
+        const command = `${cliFilePath} ./.scripts/build-tests build-tests`;
+        const stdout = execSync(`node ${command}`).toString();
+        const expected = "build-tests/build-tests/index.mjs\n";
+        if (stdout !== expected) {
+          console.log(`unexpected response when running: ${command}\n`);
+          console.log("expected:");
+          console.log(JSON.stringify(expected));
+          console.log("actual:");
+          console.log(JSON.stringify(stdout));
+          rmSync("./build-tests", { recursive: true, force: true });
+          process.exit(1);
+        }
+        const command2 = `${cliFilePath} ./.scripts/build-tests`;
+        const stdout2 = execSync(`node ${expected.trim()}`).toString();
+        const expected2 = "hello world\n";
+        if (stdout2 !== expected2) {
+          console.log(`unexpected response when running: ${command2}\n`);
+          console.log("expected:");
+          console.log(JSON.stringify(expected2));
+          console.log("actual:");
+          console.log(JSON.stringify(stdout2));
+          rmSync("./build-tests", { recursive: true, force: true });
+          process.exit(1);
+        }
+        rmSync("./build-tests", { recursive: true, force: true });
       }
+      console.log(`validated 'npx ${cliName}'`);
     }
   }
 }
@@ -53,9 +83,11 @@ if (await isDirectory("lib")) {
     console.log(`entrypoint file "${entrypoint}" doesn't exist`);
     process.exit(1);
   }
-  const { hello } = await import(process.cwd() + "/" + entrypoint);
-  const result = hello("arg1 arg2");
-  const expected = `Hello arg1 arg2!`;
+  const { transform } = await import(process.cwd() + "/" + entrypoint);
+  const result = await transform(
+    `const typedFn = (str: string) => console.log(str);\ntypedFn("hello world");`
+  );
+  const expected = 'const typedFn = (str) => console.log(str);\ntypedFn("hello world");';
   if (result !== expected) {
     console.log("expected:");
     console.log(JSON.stringify(expected));

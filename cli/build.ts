@@ -4,7 +4,7 @@
 // TODO: remove these when releasing a version that fixes this issue
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore
-import { build } from "../lib";
+import { build } from "../lib/index.js";
 import { relative } from "node:path";
 
 const args = process.argv.slice(2);
