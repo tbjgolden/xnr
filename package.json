@@ -1,6 +1,6 @@
 {
   "name": "xnr",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "license": "Apache-2.0",
   "type": "module",
   "main": "./dist/lib/index.js",
@@ -102,7 +102,7 @@
       "<rootDir>/lib/*.test.[tj]s"
     ],
     "transform": {
-      "\\.ts$": "<rootDir>/node_modules/xnr/jest.js"
+      "\\.ts$": "<rootDir>/jest.js"
     }
   }
 }
