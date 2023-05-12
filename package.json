@@ -61,7 +61,7 @@
     "pub-time": "^0.1.0",
     "simple-git-hooks": "^2.8.1",
     "typescript": ">=5.0.4",
-    "xnr": "^1.1.1"
+    "xnr": "^1.1.2"
   },
   "files": [
     "jest.js",
@@ -102,7 +102,7 @@
       "<rootDir>/lib/*.test.[tj]s"
     ],
     "transform": {
-      "\\.ts$": "<rootDir>/jest.js"
+      "\\.ts$": "<rootDir>/node_modules/xnr/jest.js"
     }
   }
 }
