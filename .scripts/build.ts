@@ -1,7 +1,6 @@
 import { readFile, writeFile, rm, mkdir } from "node:fs/promises";
 import { spawn } from "node:child_process";
-import { readJSON } from "easier-node";
-import { checkDirectory } from "./lib/utils";
+import { checkDirectory, readJSON } from "./lib/utils";
 
 checkDirectory();
 
