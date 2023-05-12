@@ -13,10 +13,10 @@ Easily, quickly and reliably run a Node.js script from the CLI.
 npx xnr any-file.{ts,tsx,cts,mts,js,jsx,cjs,mjs}
 ```
 
-- **can handle local dependencies** &mdash; will transpile anything needed to run the file
+- **converts local dependencies** &mdash; will transpile anything needed to run the file
 - **zero config** &mdash; it should just work - but if it doesn't work, leave an issue!
 - **fast** &mdash; skips TypeScript type checking
-- **light** &mdash; 4MB including dependencies = faster CI
+- **light** &mdash; <4MB including dependencies = faster CI
 - **tolerant** &mdash; makes as few assumptions as possible
   - supports tsconfig paths if provided
   - equally, doesn't need tsconfig
@@ -27,29 +27,82 @@ npx xnr any-file.{ts,tsx,cts,mts,js,jsx,cjs,mjs}
 > JavaScript, and then performs fast AST manipulations to make the interop work - no
 > tsc/babel/esbuild/swc here_
 
-## Benchmarks (2022-06)
+## Benchmarks
 
-- xnr
-  - size: 3.4MB
-  - speed: 28.3ms/run
-  - passes interop test: 18/18
-- ts-node
-  - size: 70MB
-  - speed: 158.5ms/run
-  - config issues during setup: 1
-  - passes interop test\*: 10/18
-- swc-node
-  - size: 208M
-  - speed: 22.4ms/run
-  - passes interop test: 12/18 (couldn't bundle)
-- esbuild-runner
-  - size: 9.2M
-  - speed: 75.3ms/run
-  - passes interop test: 17/18 (couldn't import ts from mjs)
+| runner   | single TS file | big TS project | install time | install size | compat #1 | compat #2 | compat #3 | compat #4 |
+| -------- | -------------: | -------------: | -----------: | -----------: | :-------: | :-------: | :-------: | :-------: |
+| xnr      |           .14s |           .56s |        4.82s |        3.9MB |    ✅     |    ✅     |    ✅     |    ✅     |
+| esr      |           .08s |           .12s |        7.71s |       10.6MB |    ✅     |    ✅     |    ✅     |    ❌     |
+| swc-node |           .22s |           .38s |       37.88s |       95.1MB |    ✅     |    ✅     |    ❌     |    ❌     |
+| ts-node  |           .65s |          1.60s |       16.10s |       45.2MB |    ✅     |    ❌     |    ❌     |    ❌     |
 
-\* using sample config on README
-
-Interop test involves testing whether you can import a filetype from another filetype or not.
+> <details>
+>
+> <summary><strong>Methodology</strong></summary>
+>
+> ### single ts file
+>
+> ```ts
+> const run = (date: Date): void => {
+>   console.log(
+>     [
+>       date.getFullYear(),
+>       (date.getMonth() + 1).toString().padStart(2, "0"),
+>       date.getDate().toString().padStart(2, "0"),
+>     ].join("-")
+>   );
+> };
+>
+> run(new Date(3000, 0, 1));
+> ```
+>
+> ### big ts project + compat tests
+>
+> Measured by running a simple script that imports the `date-fn` (TypeScript) > source files
+> directly.
+>
+> ```ts
+> // repo:date-fns/src/index.ts
+> import { format } from "(date-fns-source)";
+> // where `(date-fn-source)` =>
+> //   #1 `./src`
+> //   #2 `./src/index.ts`
+> //   #3 `./src/index.js`
+> //   #4 `./src` with `"type": "module"` in package.json
+> // support for each import path varies by runner
+>
+> const run = (): void => {
+>   console.log(format(new Date(3000, 0, 1), "yyyy-MM-dd"));
+> };
+>
+> run();
+> ```
+>
+> ### the actual script
+>
+> ```sh
+> echo "xnr:"
+> start_timer && node ./node_modules/.bin/xnr ./file.ts && print_timer
+> echo "ts-node:"
+> start_timer && node ./node_modules/.bin/ts-node ./file.ts && print_timer
+> echo "esr:"
+> start_timer && node ./node_modules/.bin/esr ./file.ts && print_timer
+> echo "swc-node:"
+> start_timer && node -r @swc-node/register ./file.ts && print_timer
+> ```
+>
+> 2023-05-12, 3 run avg, MacBook Pro w/ M1 Pro
+>
+> ### byte size
+>
+> installed required dependencies with npm into an empty dir, then:  
+> `rm package.json && rm package-lock.json && du -sk .`
+>
+> ### install time
+>
+> tested with my (slow 😢) 1.5MB/s Wi-Fi download speed (no cache, 3 run avg)
+>
+> </details>
 
 ## Getting Started
 
@@ -82,33 +135,29 @@ your-build-dir/your-file.cjs
 hello world
 ```
 
-> `your-build-dir` will contain all transpiled local dependencies needed to run
+> `your-build-dir` contains all the needed local dependencies (transpiled) to run the file natively
 
 ## API
 
 ```ts
-/**
- * Convert an input code string to a node-friendly esm code string
- */
+// Convert an input code string to a node-friendly esm code string
 export declare const transform: (
   inputCode: string,
   filePath?: string | undefined
 ) => Promise<string>;
-/**
- * Convert source code from an entry file into a directory of node-friendly esm code
- */
+
+// Convert source code from an entry file into a directory of node-friendly esm code
 export declare const build: (
   entryFilePath: string,
   outputDirectory?: string | undefined
 ) => Promise<string | undefined>;
-/**
- * Runs a file, no questions asked (auto-transpiling it and its dependencies as required)
- */
+
+// Runs a file, no questions asked (auto-transpiling it and its dependencies as required)
 export declare const run: (
   entryFilePath: string,
   args?: string[],
   outputDirectory?: string | undefined
-) => Promise<number>;
+) => Promise<number>; // status code
 ```
 
 ---
