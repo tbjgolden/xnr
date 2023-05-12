@@ -40,6 +40,8 @@ module.exports = {
     ],
     "@typescript-eslint/no-array-constructor": ["error"],
     "@typescript-eslint/no-explicit-any": ["warn"],
+    "security/detect-non-literal-fs-filename": "off",
+    "security/detect-object-injection": "off",
     "unicorn/filename-case": "off",
     "unicorn/no-null": "off",
     "unicorn/prevent-abbreviations": [
@@ -74,6 +76,13 @@ module.exports = {
       rules: {
         "no-console": "off",
         "unicorn/no-process-exit": "off",
+      },
+    },
+    {
+      files: ["lib/*.ts"],
+      rules: {
+        "security/detect-non-literal-fs-filename": "warn",
+        "security/detect-object-injection": "warn",
       },
     },
   ],
