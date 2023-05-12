@@ -144,7 +144,12 @@ export const build = async (
         // find config file if hasn't already found one for this dir
         const pathResolvers = getResolveData(filePath);
         // read file for imports/exports/requires
-        const dependenciesData = await readForDependencies(ast, pathResolvers, checkFile);
+        const dependenciesData = await readForDependencies(
+          ast,
+          pathResolvers,
+          actualFilePath,
+          checkFile
+        );
         const dependencies = dependenciesData.filter(([dependency]) => {
           return !isNodeBuiltin(dependency);
         });
@@ -296,6 +301,7 @@ export const run = async (
 const readForDependencies = async (
   ast: AST,
   resolveData: ResolveData,
+  filePath: string,
   checkFile: (filePath: string) => boolean
 ) => {
   const dependencies: Array<[string, "import" | "require", string]> = [];
@@ -373,18 +379,16 @@ const readForDependencies = async (
       const matches = resolveData.matcher(dependencyPair[0]);
       if (matches.length > 0) {
         for (const match of matches) {
-          try {
-            // TODO: pass the parentExt into this
+          if (
             resolveLocalImport({
               type: dependencyPair[1],
               absImportPath: match,
-              parentExt: "",
+              parentExt: path.extname(filePath),
               checkFile,
-            });
+            })
+          ) {
             dependencyPair[0] = match;
             break;
-          } catch {
-            //
           }
         }
       }
@@ -560,9 +564,9 @@ const updateImports = async (
 
             promises.push(
               getDependencyEntryFilePath()
-                .then((dependencyEntryFilePath) => {
-                  return determineModuleTypeFromPath(dependencyEntryFilePath);
-                })
+                .then((dependencyEntryFilePath) =>
+                  determineModuleTypeFromPath(dependencyEntryFilePath)
+                )
                 .then((dependencyModuleType) => {
                   if (dependencyModuleType === ".cjs") {
                     const uniqueID = defaultImport ?? `xnr_${randomUUID().slice(-12)}`;
