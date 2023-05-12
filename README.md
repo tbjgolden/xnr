@@ -31,10 +31,10 @@ npx xnr any-file.{ts,tsx,cts,mts,js,jsx,cjs,mjs}
 
 | runner   | single TS file | big TS project | install time | install size | compat #1 | compat #2 | compat #3 | compat #4 |
 | -------- | -------------: | -------------: | -----------: | -----------: | :-------: | :-------: | :-------: | :-------: |
-| xnr      |           .14s |           .56s |        4.82s |        3.9MB |    ✅     |    ✅     |    ✅     |    ✅     |
-| esr      |           .08s |           .12s |        7.71s |       10.6MB |    ✅     |    ✅     |    ✅     |    ❌     |
-| swc-node |           .22s |           .38s |       37.88s |       95.1MB |    ✅     |    ✅     |    ❌     |    ❌     |
-| ts-node  |           .65s |          1.60s |       16.10s |       45.2MB |    ✅     |    ❌     |    ❌     |    ❌     |
+| xnr      |        `0.14`s |        `0.56`s |      `4.82`s |      `3.9`MB |    ✅     |    ✅     |    ✅     |    ✅     |
+| esr      |        `0.08`s |        `0.12`s |      `7.71`s |     `10.6`MB |    ✅     |    ✅     |    ✅     |    ❌     |
+| swc-node |        `0.22`s |        `0.38`s |     `37.88`s |     `95.1`MB |    ✅     |    ✅     |    ❌     |    ❌     |
+| ts-node  |        `0.65`s |        `1.60`s |     `16.10`s |     `45.2`MB |    ✅     |    ❌     |    ❌     |    ❌     |
 
 > <details>
 >
