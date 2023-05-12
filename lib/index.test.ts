@@ -2,7 +2,8 @@
 
 // TODO: remove these when releasing a version that fixes this issue
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-import { build, transform, resolveLocalImport } from "./index.js";
+// @ts-ignore
+import { build, transform, resolveLocalImport } from "./index.ts";
 
 import { fork } from "node:child_process";
 import path from "node:path/posix";
