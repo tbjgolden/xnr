@@ -1,9 +1,5 @@
 #!/usr/bin/env -S node --experimental-import-meta-resolve --no-warnings
 /* eslint-disable no-console */
-
-// TODO: remove these when releasing a version that fixes this issue
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore
 import { build } from "../lib/index.js";
 import { relative } from "node:path";
 
