@@ -7,7 +7,8 @@
   "exports": "./dist/lib/index.js",
   "types": "./dist/lib/index.d.ts",
   "bin": {
-    "xnr": "./dist/cli/index.js"
+    "xnr": "./dist/cli/run.js",
+    "xnrb": "./dist/cli/build.js"
   },
   "description": "Easily, quickly and reliably run a Node.js script from the CLI.",
   "keywords": [
