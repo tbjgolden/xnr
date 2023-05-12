@@ -1,4 +1,4 @@
-import { transform } from "./dist/esm/index.js";
+import { transform } from "./dist/lib/index.js";
 
 /**
  * @type {import('@jest/transform').Transformer}
