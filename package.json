@@ -9,6 +9,19 @@
   "bin": {
     "xnr": "./dist/cli/index.js"
   },
+  "description": "Easily, quickly and reliably run a Node.js script from the CLI.",
+  "keywords": [
+    "node",
+    "typescript",
+    "modules",
+    "commonjs",
+    "esm",
+    "cjs",
+    "run",
+    "runner",
+    "extreme",
+    "xtreme"
+  ],
   "homepage": "https://github.com/tbjgolden/xnr",
   "author": {
     "name": "Tom Golden",
