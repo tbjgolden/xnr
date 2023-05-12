@@ -11,4 +11,4 @@ dist
 /.build.*
 /coverage
 !.scripts
-build-tests
+/build-tests
