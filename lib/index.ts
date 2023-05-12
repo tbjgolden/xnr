@@ -7,6 +7,10 @@ import { fileURLToPath } from "node:url";
 import { generate } from "astring";
 import { transform as sucraseTransform } from "sucrase";
 import { getTsconfig, createPathsMatcher } from "get-tsconfig";
+// TODO: remove these when releasing a version that fixes this issue
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore
+import { resolveLocalImport } from "./resolve";
 const require = createRequire(import.meta.url);
 const { parseModule } = require("esprima-next");
 
@@ -41,7 +45,6 @@ export const transform = async (inputCode: string, filePath?: string): Promise<s
     enableLegacyBabel5ModuleInterop: false,
     filePath,
     production: false,
-    disableESTransforms: true,
   });
   if (code.startsWith("#!")) {
     code = code.slice(code.indexOf("\n") + 1);
@@ -60,62 +63,120 @@ export const build = async (
 
   const astCache = new Map<string, AST>();
 
+  const fsCache = new Map<string, Set<string>>();
+  const checkFile = (filePath: string): boolean => {
+    const parentDirectory = path.join(filePath, "..");
+    const name = filePath.slice(parentDirectory.length + 1);
+    let filesSet = fsCache.get(parentDirectory);
+    if (!filesSet) {
+      filesSet = new Set<string>();
+      try {
+        // eslint-disable-next-line security/detect-non-literal-fs-filename
+        for (const dirent of fs.readdirSync(parentDirectory, { withFileTypes: true })) {
+          if (dirent.isFile()) {
+            filesSet.add(dirent.name);
+          }
+        }
+        fsCache.set(parentDirectory, filesSet);
+      } catch {}
+    }
+    return filesSet.has(name);
+  };
+
   const firstFilePath = path.resolve(process.cwd(), entryFilePath);
   const fileStack = [
     {
       filePath: firstFilePath,
-      likelyExtension: path.extname(firstFilePath),
+      parentFilePath: path.extname(firstFilePath),
       entryMethod: "entry",
     },
   ];
   const explored = new Set();
   const internalSourceFiles: Array<Omit<InternalSourceFile, "outputFilePath">> = [];
   while (fileStack.length > 0) {
-    const { filePath, likelyExtension } = fileStack.pop() as {
+    const { filePath, parentFilePath, entryMethod } = fileStack.pop() as {
       filePath: string;
-      likelyExtension: string;
+      parentFilePath: string;
       entryMethod: "entry" | "import" | "require";
     };
     if (!explored.has(filePath)) {
       explored.add(filePath);
-      const actualFilePath = await findActualFilePath(filePath, likelyExtension);
-      const actualFileString = await fs.promises.readFile(actualFilePath, "utf8");
-      // use sucrase to turn it into output string, store for later
-      const code = await transform(actualFileString, actualFilePath);
-      // parse into an ast. cache for later key by filepath
-      const ast: AST = parseModule(code);
-      astCache.set(filePath, ast);
-      // find config file if hasn't already found one for this dir
-      const pathResolvers = getResolveData(filePath);
-      // read file for imports/exports/requires
-      const dependenciesData = await readForDependencies(ast, pathResolvers);
-      const dependencies = dependenciesData.filter(([dependency]) => {
-        return !isNodeBuiltin(dependency);
+      const actualFilePath = resolveLocalImport({
+        parentExt: path.extname(parentFilePath),
+        absImportPath: filePath,
+        type: entryMethod === "require" ? "require" : "import",
+        checkFile,
       });
-      // filter to internal dependencies
-      const dependencyMap = new Map(
-        dependencies.map(([resolved, , original]) => {
-          return [original, resolved];
-        })
-      );
-      for (const [dependency, entryMethod] of dependencies) {
-        if (dependency.startsWith(".") || dependency.startsWith("/")) {
-          const nextFilePath = path.resolve(actualFilePath, "..", dependency);
-
-          fileStack.push({
-            filePath: nextFilePath,
-            likelyExtension: path.extname(nextFilePath) || likelyExtension,
-            entryMethod,
-          });
-        }
+      if (!actualFilePath) {
+        throw new Error(
+          `Could not resolve "${path.relative(process.cwd(), filePath)}"${
+            parentFilePath ? `\n  from "${path.relative(process.cwd(), parentFilePath)}"` : ""
+          }`
+        );
       }
 
-      internalSourceFiles.push({
-        rawInputFile: filePath,
-        inputFile: actualFilePath,
-        outputFormat: await determineModuleTypeFromAST(ast),
-        dependencyMap,
-      });
+      // eslint-disable-next-line security/detect-non-literal-fs-filename
+      const actualFileString = await fs.promises.readFile(actualFilePath, "utf8");
+
+      // special case if the file is json
+      if (path.extname(actualFilePath).toLowerCase().startsWith(".json")) {
+        const outputFormat = entryMethod === "require" ? ".cjs" : ".mjs";
+        // use sucrase to turn it into output string, store for later
+        const code = await transform(
+          (outputFormat === ".mjs" ? "export default " : "module.exports = ") + actualFileString,
+          actualFilePath
+        );
+        // parse into an ast. cache for later key by filepath
+        const ast: AST = parseModule(code);
+        astCache.set(filePath, ast);
+        internalSourceFiles.push({
+          rawInputFile: filePath,
+          inputFile: actualFilePath,
+          outputFormat,
+          dependencyMap: new Map<string, string>(),
+        });
+      } else {
+        // use sucrase to turn it into output string, store for later
+        const code = await transform(actualFileString, actualFilePath);
+        // parse into an ast. cache for later key by filepath
+        const ast: AST = parseModule(code);
+        astCache.set(filePath, ast);
+        // find config file if hasn't already found one for this dir
+        const pathResolvers = getResolveData(filePath);
+        // read file for imports/exports/requires
+        const dependenciesData = await readForDependencies(
+          ast,
+          pathResolvers,
+          actualFilePath,
+          checkFile
+        );
+        const dependencies = dependenciesData.filter(([dependency]) => {
+          return !isNodeBuiltin(dependency);
+        });
+        // filter to internal dependencies
+        const dependencyMap = new Map(
+          dependencies.map(([resolved, , original]) => {
+            return [original, resolved];
+          })
+        );
+        for (const [dependency, entryMethod] of dependencies) {
+          if (dependency.startsWith(".") || dependency.startsWith("/")) {
+            const nextFilePath = path.resolve(actualFilePath, "..", dependency);
+
+            fileStack.push({
+              filePath: nextFilePath,
+              parentFilePath: filePath,
+              entryMethod,
+            });
+          }
+        }
+        internalSourceFiles.push({
+          rawInputFile: filePath,
+          inputFile: actualFilePath,
+          outputFormat: await determineModuleTypeFromAST(ast),
+          dependencyMap,
+        });
+      }
     }
   }
 
@@ -130,7 +191,9 @@ export const build = async (
     if (areAllFilePathsDescendants) break;
   }
 
+  // eslint-disable-next-line security/detect-non-literal-fs-filename
   await fs.promises.rm(outputDirectory, { recursive: true, force: true });
+  // eslint-disable-next-line security/detect-non-literal-fs-filename
   await fs.promises.mkdir(outputDirectory, { recursive: true });
 
   let outputEntryFilePath = "";
@@ -182,9 +245,11 @@ export const build = async (
             "const require = createRequire(import.meta.url);\n";
         }
 
+        // eslint-disable-next-line security/detect-non-literal-fs-filename
         await fs.promises.mkdir(path.join(outputFilePath, ".."), {
           recursive: true,
         });
+        // eslint-disable-next-line security/detect-non-literal-fs-filename
         await fs.promises.writeFile(outputFilePath, prelude + newFile);
       }
     )
@@ -227,153 +292,42 @@ export const run = async (
     }
   } catch (error) {
     cleanupSync();
-    console.error(error);
-    return 1;
+    throw error;
   }
-};
-
-const findActualFilePath = async (filePath_: string, likelyExtension = "") => {
-  const endsWithSlash = filePath_.endsWith("/");
-  const filePath = path.join(filePath_, ".");
-
-  try {
-    const stats = await fs.promises.lstat(filePath);
-    if (stats.isFile()) {
-      return filePath;
-    }
-  } catch {
-    //
-  }
-
-  const dirname = path.dirname(filePath);
-  const filename = filePath.slice(dirname.length + 1);
-  const anyExt = new Set();
-  let hasSub = false;
-  // scan dirs for possible matches
-  for (const directoryContent of await fs.promises.readdir(dirname, {
-    withFileTypes: true,
-  })) {
-    if (directoryContent.name === filename || directoryContent.name.startsWith(filename + ".")) {
-      if (directoryContent.isFile()) {
-        anyExt.add(directoryContent.name);
-      } else if (directoryContent.isDirectory() && directoryContent.name === filename) {
-        hasSub = true;
-      }
-    }
-  }
-  const subAnyExt = new Set();
-  if (hasSub) {
-    for (const directoryContent of await fs.promises.readdir(filePath, {
-      withFileTypes: true,
-    })) {
-      if (
-        (directoryContent.name === "index" || directoryContent.name.startsWith("index.")) &&
-        directoryContent.isFile()
-      )
-        subAnyExt.add(directoryContent.name);
-    }
-  }
-  // compare possible matches in sensible order
-  if (endsWithSlash) {
-    if (likelyExtension !== "") {
-      if (subAnyExt.has("index" + likelyExtension)) {
-        // sub/index.likelyExtension
-        return filePath + "/index" + likelyExtension;
-      }
-      if (anyExt.has(filename + likelyExtension)) {
-        // sub.likelyExtension
-        return filePath + likelyExtension;
-      }
-    }
-    const EXTENSION_ORDER = [".tsx", ".ts", ".mjs", ".cjs", ".jsx", ".js"];
-    for (const EXT of EXTENSION_ORDER) {
-      if (subAnyExt.has("index" + EXT)) {
-        // sub/index.commonExtension
-        return filePath + "/index" + EXT;
-      }
-    }
-    for (const EXT of EXTENSION_ORDER) {
-      if (anyExt.has(filename + EXT)) {
-        // sub.commonExtension
-        return filePath + EXT;
-      }
-    }
-    if (subAnyExt.has("index")) {
-      // sub/index
-      return filePath + "/index";
-    }
-    if (subAnyExt.size === 1) {
-      // sub/index.any
-      return filePath + "/index" + subAnyExt.values().next().value;
-    }
-    if (anyExt.size === 1) {
-      // sub.any
-      return filePath + anyExt.values().next().value;
-    }
-  } else {
-    if (likelyExtension !== "") {
-      if (anyExt.has(filename + likelyExtension)) {
-        // sub.likelyExtension
-        return filePath + likelyExtension;
-      }
-      if (subAnyExt.has("index" + likelyExtension)) {
-        // sub/index.likelyExtension
-        return filePath + "/index" + likelyExtension;
-      }
-    }
-    const EXTENSION_ORDER = [".tsx", ".ts", ".mjs", ".cjs", ".jsx", ".js"];
-    for (const EXT of EXTENSION_ORDER) {
-      if (anyExt.has(filename + EXT)) {
-        // sub.commonExtension
-        return filePath + EXT;
-      }
-    }
-    for (const EXT of EXTENSION_ORDER) {
-      if (subAnyExt.has("index" + EXT)) {
-        // sub/index.commonExtension
-        return filePath + "/index" + EXT;
-      }
-    }
-    if (subAnyExt.has("index")) {
-      // sub/index
-      return filePath + "/index";
-    }
-    if (anyExt.size === 1) {
-      // sub.any
-      return filePath + anyExt.values().next().value;
-    }
-    if (subAnyExt.size === 1) {
-      // sub/index.any
-      return filePath + "/index" + subAnyExt.values().next().value;
-    }
-  }
-  throw new Error(`Could not resolve ${path.relative(process.cwd(), filePath)}`);
 };
 
 // ----------------------------------------------------------------
 
-const readForDependencies = async (ast: AST, resolveData: ResolveData) => {
+const readForDependencies = async (
+  ast: AST,
+  resolveData: ResolveData,
+  filePath: string,
+  checkFile: (filePath: string) => boolean
+) => {
   const dependencies: Array<[string, "import" | "require", string]> = [];
 
   traverse(ast, (node: Node) => {
     switch (node.type) {
-      case "ImportExpression":
+      case "ImportExpression": {
         if (node.source && node.source.value) {
           dependencies.push([node.source.value, "import", node.source.value]);
         }
         break;
-      case "ImportDeclaration":
+      }
+      case "ImportDeclaration": {
         if (node.source && node.source.value) {
           dependencies.push([node.source.value, "import", node.source.value]);
         }
         break;
+      }
       case "ExportNamedDeclaration":
-      case "ExportAllDeclaration":
+      case "ExportAllDeclaration": {
         if (node.source && node.source.value) {
           dependencies.push([node.source.value, "import", node.source.value]);
         }
         break;
-      case "CallExpression":
+      }
+      case "CallExpression": {
         if (!node || !node.arguments || node.arguments.length === 0) break;
 
         if (
@@ -413,6 +367,7 @@ const readForDependencies = async (ast: AST, resolveData: ResolveData) => {
         }
 
         break;
+      }
       default:
       // nothing
     }
@@ -424,12 +379,16 @@ const readForDependencies = async (ast: AST, resolveData: ResolveData) => {
       const matches = resolveData.matcher(dependencyPair[0]);
       if (matches.length > 0) {
         for (const match of matches) {
-          try {
-            await findActualFilePath(match);
+          if (
+            resolveLocalImport({
+              type: dependencyPair[1],
+              absImportPath: match,
+              parentExt: path.extname(filePath),
+              checkFile,
+            })
+          ) {
             dependencyPair[0] = match;
             break;
-          } catch {
-            //
           }
         }
       }
@@ -518,7 +477,7 @@ const updateImports = async (
 
   traverse(ast, async (node: Node) => {
     switch (node.type) {
-      case "ImportExpression":
+      case "ImportExpression": {
         if (node.source) {
           if (node.source.value) {
             const value = ensure(node.source.value);
@@ -551,7 +510,8 @@ const updateImports = async (
           }
         }
         break;
-      case "ImportDeclaration":
+      }
+      case "ImportDeclaration": {
         if (node.importKind === "type") break;
         if (node.source && node.source.value) {
           const defaultImport = node.specifiers.find((node: Node) => {
@@ -604,9 +564,9 @@ const updateImports = async (
 
             promises.push(
               getDependencyEntryFilePath()
-                .then((dependencyEntryFilePath) => {
-                  return determineModuleTypeFromPath(dependencyEntryFilePath);
-                })
+                .then((dependencyEntryFilePath) =>
+                  determineModuleTypeFromPath(dependencyEntryFilePath)
+                )
                 .then((dependencyModuleType) => {
                   if (dependencyModuleType === ".cjs") {
                     const uniqueID = defaultImport ?? `xnr_${randomUUID().slice(-12)}`;
@@ -655,8 +615,9 @@ const updateImports = async (
           };
         }
         break;
+      }
       case "ExportNamedDeclaration":
-      case "ExportAllDeclaration":
+      case "ExportAllDeclaration": {
         if (node.source && node.source.value) {
           const value = ensure(node.source.value);
           node.source = {
@@ -666,7 +627,8 @@ const updateImports = async (
           };
         }
         break;
-      case "CallExpression":
+      }
+      case "CallExpression": {
         if (!isRequire(node) || !node.arguments || node.arguments.length === 0) {
           break;
         }
@@ -708,6 +670,7 @@ const updateImports = async (
         }
 
         break;
+      }
       default:
       // nothing
     }
@@ -804,9 +767,10 @@ const determineModuleTypeFromAST = async (ast: AST) => {
       case "ImportDeclaration":
       case "ImportDefaultSpecifier":
       case "ImportNamespaceSpecifier":
-      case "ImportSpecifier":
+      case "ImportSpecifier": {
         hasFoundExport = true;
         break;
+      }
       default:
       // nothing
       // note "ImportExpression" not included as import() can appear in cjs
@@ -823,6 +787,7 @@ const determineModuleTypeFromPath = async (
   if (lowercaseExtension === ".cjs" || lowercaseExtension === ".mjs") {
     return lowercaseExtension;
   } else {
+    // eslint-disable-next-line security/detect-non-literal-fs-filename
     const ast = parseModule(await fs.promises.readFile(dependencyEntryFilePath, "utf8"));
     return determineModuleTypeFromAST(ast);
   }

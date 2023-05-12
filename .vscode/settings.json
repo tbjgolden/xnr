@@ -1,11 +1,15 @@
 {
   "editor.formatOnSave": true,
   "editor.codeActionsOnSave": {
-    "source.fixAll.eslint": true,
-    "source.fixAll.stylelint": true
+    "source.fixAll.eslint": true
   },
   "prettier.prettierPath": "node_modules/prettier",
-  "css.validate": false,
-  "less.validate": false,
-  "scss.validate": false
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "explorer.fileNesting.enabled": false,
+  "explorer.fileNesting.expand": true,
+  "editor.tabSize": 2,
+  "files.exclude": {
+    "**/.eslintcache": true
+  },
+  "editor.rulers": [100]
 }

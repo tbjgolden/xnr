@@ -1,11 +1,16 @@
-# `xnr` xtreme node runner
+# xnr
 
-![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/tbjgolden/xnr/tests.yml?branch=main) ![npm](https://img.shields.io/npm/v/xnr)
+![banner](banner.svg)
 
-Easily, quickly and reliably run a Node.js script written in TypeScript/JSX from the CLI.
+![npm](https://img.shields.io/npm/v/xnr)
+![npm type definitions](https://img.shields.io/npm/types/xnr)
+![license](https://img.shields.io/npm/l/xnr)
+[![install size](https://packagephobia.com/badge?p=xnr)](https://packagephobia.com/result?p=xnr)
+
+Easily, quickly and reliably run a Node.js script from the CLI.
 
 ```sh
-npx xnr any-file.{ts,js,mjs,cjs,tsx,jsx,*}
+npx xnr any-file.{ts,tsx,cts,mts,js,jsx,cjs,mjs}
 ```
 
 - **can handle local dependencies** &mdash; will transpile anything needed to run the file
@@ -18,7 +23,9 @@ npx xnr any-file.{ts,js,mjs,cjs,tsx,jsx,*}
   - plays nice with rogue npm dependencies that expect one of `require` or `import`
 - just performant\* JavaScript &mdash; no Rust or Golang!
 
-> _\* uses [`sucrase`](https://github.com/alangpierce/sucrase) to convert to TypeScript and JSX to JavaScript, and then performs fast AST manipulations to make the interop work - no tsc/babel/esbuild/swc here_
+> _\* uses [`sucrase`](https://github.com/alangpierce/sucrase) to convert to TypeScript to
+> JavaScript, and then performs fast AST manipulations to make the interop work - no
+> tsc/babel/esbuild/swc here_
 
 ## Benchmarks (2022-06)
 
@@ -77,14 +84,7 @@ hello world
 
 > `your-build-dir` will contain all transpiled local dependencies needed to run
 
-## Requirements
-
-- `node` `>=16.14.0`
-- to use npx above `npm` `>=5.2.0`
-
-Not yet verified on Windows (but help welcome!)
-
-## Node API
+## API
 
 ```ts
 /**
@@ -111,6 +111,10 @@ export declare const run: (
 ) => Promise<number>;
 ```
 
-## License
+---
+
+Please leave bug reports if something doesn't work as expected! 😄
+
+## Licence
 
 Apache-2.0
