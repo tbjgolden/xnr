@@ -969,17 +969,17 @@ const runStrategy = (
 ) => {
   // eslint-disable-next-line unicorn/prefer-switch
   if (strategy === "ts>tsx") {
-    return t(base + ".ts") ?? t(base + ".tsx") ?? t(base + ".d.ts");
+    return t(base + ".ts") ?? t(base + ".tsx");
   } else if (strategy === "tsx>ts") {
-    return t(base + ".tsx") ?? t(base + ".ts") ?? t(base + ".d.ts");
+    return t(base + ".tsx") ?? t(base + ".ts");
   } else if (strategy === "js>jsx") {
     return t(base + ".js") ?? t(base + ".jsx");
   } else if (strategy === "jsx>js") {
     return t(base + ".jsx") ?? t(base + ".js");
   } else if (strategy === "cts") {
-    return t(base + ".cts") ?? t(base + ".d.cts");
+    return t(base + ".cts");
   } else if (strategy === "mts") {
-    return t(base + ".mts") ?? t(base + ".d.mts");
+    return t(base + ".mts");
   } else if (strategy === "cjs") {
     return t(base + ".cjs");
   } else {
