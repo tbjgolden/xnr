@@ -1,6 +1,6 @@
 {
   "name": "xnr",
-  "version": "1.1.2",
+  "version": "1.1.3",
   "license": "Apache-2.0",
   "type": "module",
   "main": "./dist/lib/index.js",
