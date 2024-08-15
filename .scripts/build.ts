@@ -1,6 +1,10 @@
-import { readFile, writeFile, rm, mkdir } from "node:fs/promises";
+import { readFile, writeFile, rm, mkdir, chmod } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { checkDirectory, readJSON } from "./lib/utils";
+import { rollup, RollupBuild } from "rollup";
+import { nodeResolve } from "@rollup/plugin-node-resolve";
+import commonjs from "@rollup/plugin-commonjs";
+import terser from "@rollup/plugin-terser";
 
 checkDirectory();
 
@@ -27,3 +31,32 @@ await new Promise<void>((resolve, reject) => {
   });
 });
 await rm("tsconfig.tmp.json");
+
+// ---
+
+let bundle: RollupBuild | undefined;
+let buildFailed = false;
+try {
+  // create a bundle
+  bundle = await rollup({
+    input: "dist/cli/run.js",
+    external: [/^node:/],
+    plugins: [nodeResolve(), commonjs(), terser({})],
+    onwarn: () => {
+      // ignore
+    },
+  });
+
+  const { output } = await bundle.generate({ format: "es" });
+  await writeFile("dist/xnr", output[0].code);
+  await chmod("dist/xnr", 0o755);
+} catch (error) {
+  buildFailed = true;
+  // do some error reporting
+  console.error(error);
+}
+if (bundle) {
+  // closes the bundle
+  await bundle.close();
+}
+process.exit(buildFailed ? 1 : 0);
