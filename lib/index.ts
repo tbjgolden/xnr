@@ -7,8 +7,14 @@ import { fileURLToPath } from "node:url";
 import { generate } from "astring";
 import { transform as sucraseTransform } from "sucrase";
 import { getTsconfig, createPathsMatcher } from "get-tsconfig";
+import { parse } from "espree";
+
+const parseModule = (a: Parameters<typeof parse>[0], b?: Parameters<typeof parse>[1]) => {
+  return parse(a, { ...b, sourceType: "module", ecmaVersion: "latest" });
+};
+
 const require = createRequire(import.meta.url);
-const { parseModule } = require("esprima-next");
+// const { parseModule } = require("esprima-next");
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Node = any;

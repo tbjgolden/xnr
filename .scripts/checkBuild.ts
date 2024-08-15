@@ -21,7 +21,7 @@ if (await isDirectory("cli")) {
       if (cliName === "xnr") {
         const command = `${cliFilePath} ./.scripts/build-tests`;
         const stdout = execSync(`node ${command}`).toString();
-        const expected = `hello world\n`;
+        const expected = `hello world\n{ hello: 'world' }\n`;
         if (stdout !== expected) {
           console.log(`unexpected response when running: ${command}\n`);
           console.log("expected:");
@@ -45,7 +45,7 @@ if (await isDirectory("cli")) {
         }
         const command2 = `${cliFilePath} ./.scripts/build-tests`;
         const stdout2 = execSync(`node ${expected.trim()}`).toString();
-        const expected2 = "hello world\n";
+        const expected2 = "hello world\n{ hello: 'world' }\n";
         if (stdout2 !== expected2) {
           console.log(`unexpected response when running: ${command2}\n`);
           console.log("expected:");
