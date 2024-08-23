@@ -11,5 +11,6 @@
   "files.exclude": {
     "**/.eslintcache": true
   },
-  "editor.rulers": [100]
+  "editor.rulers": [100],
+  "eslint.format.enable": true
 }

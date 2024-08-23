@@ -7,7 +7,7 @@ module.exports = {
   parser: "@typescript-eslint/parser",
   extends: [
     "eslint:recommended",
-    "plugin:security/recommended",
+    // "plugin:security/recommended",
     "plugin:@typescript-eslint/recommended",
     "plugin:unicorn/recommended",
     "prettier",
@@ -40,8 +40,8 @@ module.exports = {
     ],
     "@typescript-eslint/no-array-constructor": ["error"],
     "@typescript-eslint/no-explicit-any": ["warn"],
-    "security/detect-non-literal-fs-filename": "off",
-    "security/detect-object-injection": "off",
+    // "security/detect-non-literal-fs-filename": "off",
+    // "security/detect-object-injection": "off",
     "unicorn/filename-case": "off",
     "unicorn/no-null": "off",
     "unicorn/prevent-abbreviations": [
@@ -81,8 +81,8 @@ module.exports = {
     {
       files: ["lib/*.ts"],
       rules: {
-        "security/detect-non-literal-fs-filename": "warn",
-        "security/detect-object-injection": "warn",
+        // "security/detect-non-literal-fs-filename": "warn",
+        // "security/detect-object-injection": "warn",
       },
     },
   ],

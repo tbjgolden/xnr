@@ -9,8 +9,6 @@ if (args.length === 0) {
   process.exit(1);
 } else {
   const [fileToRun, outputDirectory] = args;
-  const entryFile = await build(fileToRun, outputDirectory);
-  if (entryFile) {
-    console.log(relative(process.cwd(), entryFile));
-  }
+  const { entrypoint } = await build(fileToRun, outputDirectory);
+  console.log(relative(process.cwd(), entrypoint));
 }

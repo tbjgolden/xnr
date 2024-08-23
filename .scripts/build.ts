@@ -20,14 +20,27 @@ const tsconfigJson = readJSON<TSConfig>(await readFile("tsconfig.json", "utf8"))
 const buildTsconfig: TSConfig = {
   ...tsconfigJson,
   exclude: [...(tsconfigJson.exclude ?? []), "**/*.test.ts"],
-  compilerOptions: { ...tsconfigJson.compilerOptions, noEmit: false },
+  compilerOptions: {
+    ...tsconfigJson.compilerOptions,
+    allowImportingTsExtensions: false,
+    noEmit: false,
+  },
 };
 await writeFile("tsconfig.tmp.json", JSON.stringify(buildTsconfig));
 await new Promise<void>((resolve, reject) => {
   const child = spawn("npx", ["tsc", "--project", "tsconfig.tmp.json"]);
+  child.stdout.on("data", (data) => {
+    console.log(data.toString());
+  });
+  child.stderr.on("data", (data) => {
+    console.error(data.toString());
+  });
   child.on("exit", async (code) => {
-    if (code) reject(new Error(`Error code: ${code}`));
-    else resolve();
+    if (code) {
+      reject(new Error(`Error code: ${code}`));
+    } else {
+      resolve();
+    }
   });
 });
 await rm("tsconfig.tmp.json");

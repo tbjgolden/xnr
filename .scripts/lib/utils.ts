@@ -115,7 +115,6 @@ export const getPackageJson = async (): Promise<PackageJson> => {
   const obj = (JSON.parse(json) ?? {}) as JSONObject;
   let key = "";
   try {
-    /* eslint-disable security/detect-object-injection */
     for (key of [
       "name",
       "version",
@@ -154,7 +153,6 @@ export const getPackageJson = async (): Promise<PackageJson> => {
     for (key of ["author", "funding", "repository"]) {
       expectToBeStringOrStringMap(obj[key]);
     }
-    /* eslint-enable security/detect-object-injection */
   } catch {
     throw new Error(`Unexpected type found in package.json for "${key}"`);
   }

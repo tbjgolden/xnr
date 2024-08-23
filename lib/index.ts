@@ -1,20 +1,20 @@
 import fs from "node:fs";
 import path from "node:path/posix";
-import { fork } from "node:child_process";
+import { spawn } from "node:child_process";
 import { builtinModules, createRequire } from "node:module";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { generate } from "astring";
 import { transform as sucraseTransform } from "sucrase";
 import { getTsconfig, createPathsMatcher } from "get-tsconfig";
+import { resolve as importResolve } from "import-meta-resolve";
 import { parse } from "espree";
+
+const require = createRequire(import.meta.url);
 
 const parseModule = (a: Parameters<typeof parse>[0], b?: Parameters<typeof parse>[1]) => {
   return parse(a, { ...b, sourceType: "module", ecmaVersion: "latest" });
 };
-
-const require = createRequire(import.meta.url);
-// const { parseModule } = require("esprima-next");
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Node = any;
@@ -27,7 +27,8 @@ type ResolveData = {
   paths: Record<string, Array<string>>;
   ext: string;
 };
-type InternalSourceFile = {
+
+export type FileResult = {
   rawInputFile: string;
   inputFile: string;
   outputFormat: ".cjs" | ".mjs";
@@ -54,13 +55,22 @@ export const transform = async (inputCode: string, filePath?: string): Promise<s
   return code;
 };
 
+export type BuildResult = {
+  entrypoint: string;
+  files: FileResult[];
+};
+
 /**
  * Convert source code from an entry file into a directory of node-friendly esm code
  */
 export const build = async (
   entryFilePath: string,
-  outputDirectory: string | undefined = path.join(process.cwd(), "dist")
-): Promise<string | undefined> => {
+  outputDirectory: string
+): Promise<BuildResult> => {
+  if (process.platform === "win32") {
+    throw new Error("xnr does not currently support windows");
+  }
+
   outputDirectory = path.resolve(outputDirectory);
 
   const astCache = new Map<string, AST>();
@@ -73,7 +83,6 @@ export const build = async (
     if (!filesSet) {
       filesSet = new Set<string>();
       try {
-        // eslint-disable-next-line security/detect-non-literal-fs-filename
         for (const dirent of fs.readdirSync(parentDirectory, { withFileTypes: true })) {
           if (dirent.isFile()) {
             filesSet.add(dirent.name);
@@ -86,26 +95,30 @@ export const build = async (
   };
 
   const firstFilePath = path.resolve(process.cwd(), entryFilePath);
-  const fileStack = [
+  const fileStack: {
+    filePath: string;
+    parentFilePath: string;
+    rawImportPath: string;
+    entryMethod: "entry" | "import" | "require";
+  }[] = [
     {
       filePath: firstFilePath,
       parentFilePath: path.extname(firstFilePath),
+      rawImportPath: entryFilePath,
       entryMethod: "entry",
     },
   ];
   const explored = new Set();
-  const internalSourceFiles: Array<Omit<InternalSourceFile, "outputFilePath">> = [];
+  const internalSourceFiles: Array<Omit<FileResult, "outputFilePath">> = [];
   while (fileStack.length > 0) {
-    const { filePath, parentFilePath, entryMethod } = fileStack.pop() as {
-      filePath: string;
-      parentFilePath: string;
-      entryMethod: "entry" | "import" | "require";
-    };
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    const { filePath, parentFilePath, rawImportPath, entryMethod } = fileStack.pop()!;
     if (!explored.has(filePath)) {
       explored.add(filePath);
       const actualFilePath = resolveLocalImport({
-        parentExt: path.extname(parentFilePath),
         absImportPath: filePath,
+        importedFrom: parentFilePath,
+        rawImportPath,
         type: entryMethod === "require" ? "require" : "import",
         checkFile,
       });
@@ -117,7 +130,6 @@ export const build = async (
         );
       }
 
-      // eslint-disable-next-line security/detect-non-literal-fs-filename
       const actualFileString = await fs.promises.readFile(actualFilePath, "utf8");
 
       // special case if the file is json
@@ -168,6 +180,7 @@ export const build = async (
             fileStack.push({
               filePath: nextFilePath,
               parentFilePath: filePath,
+              rawImportPath: dependency,
               entryMethod,
             });
           }
@@ -193,14 +206,12 @@ export const build = async (
     if (areAllFilePathsDescendants) break;
   }
 
-  // eslint-disable-next-line security/detect-non-literal-fs-filename
   await fs.promises.rm(outputDirectory, { recursive: true, force: true });
-  // eslint-disable-next-line security/detect-non-literal-fs-filename
   await fs.promises.mkdir(outputDirectory, { recursive: true });
 
   let outputEntryFilePath = "";
 
-  const internalSourceFilesMap = new Map<string, InternalSourceFile>(
+  const internalSourceFilesMap = new Map<string, FileResult>(
     internalSourceFiles.map(({ rawInputFile, inputFile, outputFormat, dependencyMap }) => {
       let outputPath = outputDirectory + "/" + inputFile.slice(commonRootPath.length + 1);
       outputPath =
@@ -226,38 +237,38 @@ export const build = async (
     })
   );
 
+  const files = [...internalSourceFilesMap.values()];
+
   await Promise.all(
-    [...internalSourceFilesMap.values()].map(
-      async ({ rawInputFile, inputFile, outputFormat, outputFilePath, dependencyMap }) => {
-        const newFile = await updateImports(
-          rawInputFile,
-          astCache.get(rawInputFile) as AST,
-          outputDirectory,
-          path.relative(commonRootPath, inputFile),
-          internalSourceFilesMap,
-          dependencyMap,
-          inputFile
-        );
+    files.map(async ({ rawInputFile, inputFile, outputFilePath, dependencyMap }) => {
+      const newFile = await transformAST(
+        rawInputFile,
+        astCache.get(rawInputFile) as AST,
+        outputDirectory,
+        path.relative(commonRootPath, inputFile),
+        internalSourceFilesMap,
+        dependencyMap,
+        inputFile
+      );
 
-        /* Enable require from esm */
-        let prelude = "#!/usr/bin/env -S node --experimental-import-meta-resolve --no-warnings\n";
-        if (outputFormat === ".mjs" && !newFile.includes("createRequire")) {
-          prelude +=
-            "import { createRequire } from 'node:module';\n" +
-            "const require = createRequire(import.meta.url);\n";
-        }
+      /* Enable require from esm */
+      const prelude = "#!/usr/bin/env node\n";
 
-        // eslint-disable-next-line security/detect-non-literal-fs-filename
-        await fs.promises.mkdir(path.join(outputFilePath, ".."), {
-          recursive: true,
-        });
-        // eslint-disable-next-line security/detect-non-literal-fs-filename
-        await fs.promises.writeFile(outputFilePath, prelude + newFile);
-      }
-    )
+      await fs.promises.mkdir(path.join(outputFilePath, ".."), {
+        recursive: true,
+      });
+      await fs.promises.writeFile(outputFilePath, prelude + newFile);
+    })
   );
 
-  return outputEntryFilePath === "" ? undefined : outputEntryFilePath;
+  if (outputEntryFilePath === "") {
+    throw new Error("Build failed: no entry file found");
+  } else {
+    return {
+      entrypoint: outputEntryFilePath,
+      files,
+    };
+  }
 };
 
 /**
@@ -266,32 +277,119 @@ export const build = async (
 export const run = async (
   entryFilePath: string,
   args: string[] = [],
-  outputDirectory: string | undefined = path.join(process.cwd(), ".xnr")
+  outputDirectory_?: string | undefined
 ): Promise<number> => {
+  if (process.platform === "win32") {
+    throw new Error("xnr does not currently support windows");
+  }
+
+  let outputDirectory: string;
+  if (outputDirectory_) {
+    outputDirectory = path.resolve(outputDirectory_);
+  } else {
+    let current = path.resolve(entryFilePath);
+    let packageJsonPath: string | undefined;
+    while (current !== "/") {
+      const packageJsonPath_ = path.join(current, "package.json");
+      if (fs.existsSync(packageJsonPath_)) {
+        packageJsonPath = packageJsonPath_;
+        break;
+      }
+      current = path.join(current, "..");
+    }
+    outputDirectory = packageJsonPath
+      ? path.join(packageJsonPath, "../node_modules/.cache/xnr")
+      : path.join(process.cwd(), ".tmp/xnr");
+  }
+
   const cleanupSync = () => {
     fs.rmSync(outputDirectory, { recursive: true, force: true });
   };
 
   try {
-    const outputEntryFilePath = await build(entryFilePath, outputDirectory);
-    if (outputEntryFilePath === undefined) {
-      cleanupSync();
-      throw new Error("No entry file to run");
-    } else {
-      process.on("SIGINT", cleanupSync); // CTRL+C
-      process.on("SIGQUIT", cleanupSync); // Keyboard quit
-      process.on("SIGTERM", cleanupSync); // `kill` command
-      return new Promise<number>((resolve) => {
-        const child = fork(outputEntryFilePath, args, { stdio: "inherit" });
-        child.on("exit", async (code) => {
-          process.off("SIGINT", cleanupSync); // CTRL+C
-          process.off("SIGQUIT", cleanupSync); // Keyboard quit
-          process.off("SIGTERM", cleanupSync); // `kill` command
-          cleanupSync();
-          resolve(code ?? 0);
-        });
-      });
+    const { entrypoint, files } = await build(entryFilePath, outputDirectory);
+
+    const outputDirectoryErrorLocationRegex = new RegExp(
+      `(${outputDirectory.replaceAll(/[$()*+.?[\\\]^{|}]/g, "\\$&")}/[^:\n]*):(\\d+)(?::(\\d+))?`,
+      "g"
+    );
+
+    const outputToInputFileLookup = new Map<string, string>();
+    for (const { inputFile, outputFilePath } of files) {
+      outputToInputFileLookup.set(outputFilePath, inputFile);
     }
+
+    const randomBytes = "&nT@r" + "9F2Td";
+
+    const transformErrors = (data: Buffer) => {
+      let dataString = data.toString();
+
+      if (dataString.includes(outputDirectory)) {
+        // Replaces output file paths with input file paths
+        for (const match of [...dataString.matchAll(outputDirectoryErrorLocationRegex)].reverse()) {
+          const file = match[1];
+          const inputFile = outputToInputFileLookup.get(file);
+          if (inputFile) {
+            const nextPartStartIndex = (match.index as number) + match[0].length;
+            dataString = `${dataString.slice(
+              0,
+              match.index ?? 0
+            )}${inputFile}${randomBytes}${dataString.slice(nextPartStartIndex)}`;
+          }
+        }
+
+        // Removes the parts of the stack trace that are constant to all xnr runs
+        const inLines = dataString.split("\n");
+        const outLines = [];
+        let hasFoundFirstSourceFile = false;
+        for (let i = inLines.length - 1; i >= 0; i--) {
+          const inLine = inLines[i];
+          if (hasFoundFirstSourceFile) {
+            outLines.push(inLine.replaceAll(randomBytes, ""));
+          } else {
+            if (inLine.startsWith("    at ")) {
+              if (inLine.includes(randomBytes)) {
+                hasFoundFirstSourceFile = true;
+                outLines.push(inLine.replaceAll(randomBytes, ""));
+              }
+            } else {
+              outLines.push(inLine);
+            }
+          }
+        }
+        dataString = outLines.reverse().join("\n");
+      }
+
+      return dataString;
+    };
+
+    process.on("SIGINT", cleanupSync); // CTRL+C
+    process.on("SIGQUIT", cleanupSync); // Keyboard quit
+    process.on("SIGTERM", cleanupSync); // `kill` command
+    return new Promise<number>((resolve) => {
+      const child = spawn("node", [entrypoint, ...args], {
+        stdio: [
+          // stdin
+          "inherit",
+          // stdout
+          "inherit",
+          // stderr
+          "pipe",
+        ],
+      });
+
+      child.stderr?.on("data", (data) => {
+        process.stderr.write(transformErrors(data));
+      });
+
+      child.on("exit", async (code) => {
+        process.off("SIGINT", cleanupSync); // CTRL+C
+        process.off("SIGQUIT", cleanupSync); // Keyboard quit
+        process.off("SIGTERM", cleanupSync); // `kill` command
+        cleanupSync();
+        resolve(code ?? 0);
+      });
+    });
   } catch (error) {
     cleanupSync();
     throw error;
@@ -385,7 +483,8 @@ const readForDependencies = async (
             resolveLocalImport({
               type: dependencyPair[1],
               absImportPath: match,
-              parentExt: path.extname(filePath),
+              rawImportPath: dependencyPair[0],
+              importedFrom: filePath,
               checkFile,
             })
           ) {
@@ -402,17 +501,17 @@ const readForDependencies = async (
 
 // ----------------------------------------------------------------
 
-const updateImports = async (
+const transformAST = async (
   rawInputPath: string,
   ast: AST,
   outputDirectory: string,
   relativeInputFile: string,
-  internalSourceFilesMap: Map<string, InternalSourceFile>,
+  internalSourceFilesMap: Map<string, FileResult>,
   dependencyMap: Map<string, string>,
   inputFile: string
 ) => {
-  const ensure = (dependencyPath: string) => {
-    dependencyPath = dependencyMap.get(dependencyPath) ?? dependencyPath;
+  const ensure = (rawDependencyPath: string) => {
+    let dependencyPath = dependencyMap.get(rawDependencyPath) ?? rawDependencyPath;
 
     if (dependencyPath.startsWith(".") || dependencyPath.startsWith("/")) {
       // convert absolute to relative
@@ -537,28 +636,23 @@ const updateImports = async (
             const getDependencyEntryFilePath = async () => {
               let dependencyEntryFilePath: string;
 
-              const importResolve = import.meta.resolve;
               const requireResolve = require.resolve;
 
-              if (importResolve) {
+              try {
+                const fileUrl = importResolve(value, "file://" + inputFile);
+                dependencyEntryFilePath = fileURLToPath(fileUrl);
+              } catch {
                 try {
-                  const fileUrl = await importResolve(value, "file://" + inputFile);
-                  dependencyEntryFilePath = fileURLToPath(fileUrl);
+                  dependencyEntryFilePath = requireResolve(value, {
+                    paths: [inputFile],
+                  });
                 } catch {
-                  try {
-                    dependencyEntryFilePath = requireResolve(value, {
-                      paths: [inputFile],
-                    });
-                  } catch {
-                    throw new Error(
-                      `Could not import/require ${JSON.stringify(value)} from ${JSON.stringify(
-                        inputFile
-                      )}`
-                    );
-                  }
+                  throw new Error(
+                    `Could not import/require ${JSON.stringify(value)} from ${JSON.stringify(
+                      inputFile
+                    )}`
+                  );
                 }
-              } else {
-                throw new Error("xnr was run without --experimental-import-meta-resolve");
               }
 
               return dependencyEntryFilePath;
@@ -631,11 +725,26 @@ const updateImports = async (
         break;
       }
       case "CallExpression": {
-        if (!isRequire(node) || !node.arguments || node.arguments.length === 0) {
-          break;
-        }
+        if (isCreateRequire(node)) {
+          node.arguments = [
+            {
+              type: "MemberExpression",
+              object: {
+                type: "MetaProperty",
+                meta: { type: "Identifier", name: "import" },
+                property: { type: "Identifier", name: "meta" },
+                __dnr: true,
+              },
+              property: { type: "Identifier", name: "url" },
+              computed: false,
+              optional: false,
+            },
+          ];
+        } else if (isRequire(node)) {
+          if (!node.arguments || node.arguments.length === 0) {
+            break;
+          }
 
-        if (isRequire(node)) {
           if (node.arguments[0].type === "Literal" || node.arguments[0].type === "StringLiteral") {
             const value = ensure(node.arguments[0].value);
             node.arguments[0] = asLiteral(value);
@@ -673,6 +782,41 @@ const updateImports = async (
 
         break;
       }
+      case "MetaProperty": {
+        if (
+          !node.__dnr &&
+          node.meta.name === "import" &&
+          node.property.name === "meta" &&
+          node.parent?.type === "MemberExpression"
+        ) {
+          const metaName = node.parent.property.name;
+          if (metaName === "url") {
+            replaceNode(node.parent, asLiteral(`file://${inputFile}`));
+          } else if (metaName === "dirname") {
+            replaceNode(node.parent, asLiteral(path.dirname(inputFile)));
+          } else if (metaName === "filename") {
+            replaceNode(node.parent, asLiteral(inputFile));
+          } else if (metaName === "resolve") {
+            replaceNode(
+              node.parent,
+              asLiteral(importResolve(node.parent.parent.arguments[0].value, "file://" + inputFile))
+            );
+          }
+        }
+        break;
+      }
+      case "Identifier": {
+        {
+          if (node.parent?.type !== "VariableDeclarator") {
+            if (node.name === "__dirname") {
+              replaceNode(node, asLiteral(path.relative(process.cwd(), path.dirname(inputFile))));
+            } else if (node.name === "__filename") {
+              replaceNode(node, asLiteral(path.relative(process.cwd(), inputFile)));
+            }
+          }
+        }
+        break;
+      }
       default:
       // nothing
     }
@@ -681,6 +825,20 @@ const updateImports = async (
   await Promise.all(promises);
 
   return generate(ast);
+};
+
+const replaceNode = (node: Node, replacement: Node) => {
+  if (node.parent?.splice === undefined) {
+    // object
+    for (const [key, value] of Object.entries(node.parent)) {
+      if (value === node) {
+        node.parent[key] = replacement;
+      }
+    }
+  } else {
+    // array
+    node.parent.splice(node.parent.indexOf(node), 1, replacement);
+  }
 };
 
 const asLiteral = (value: string) => {
@@ -695,8 +853,16 @@ const isRequire = (node: Node) => {
   if (!node) return false;
 
   const c = node.callee;
-
   return c && node.type === "CallExpression" && c.type === "Identifier" && c.name === "require";
+};
+
+const isCreateRequire = (node: Node) => {
+  if (!node) return false;
+
+  const c = node.callee;
+  return (
+    c && node.type === "CallExpression" && c.type === "Identifier" && c.name === "createRequire"
+  );
 };
 
 const BUILTINS = new Set(builtinModules);
@@ -789,7 +955,6 @@ const determineModuleTypeFromPath = async (
   if (lowercaseExtension === ".cjs" || lowercaseExtension === ".mjs") {
     return lowercaseExtension;
   } else {
-    // eslint-disable-next-line security/detect-non-literal-fs-filename
     const ast = parseModule(await fs.promises.readFile(dependencyEntryFilePath, "utf8"));
     return determineModuleTypeFromAST(ast);
   }
@@ -873,14 +1038,18 @@ const EXT_ORDER_MAP_COMMONJS: ExtOrderMap = {
 export const resolveLocalImport = ({
   type,
   absImportPath: absImportPathMaybeWithSlash,
-  parentExt,
+  rawImportPath,
+  importedFrom,
   checkFile,
 }: {
   type: "require" | "import";
   absImportPath: string;
-  parentExt: string;
+  rawImportPath: string;
+  importedFrom: string;
   checkFile: (filePath: string) => boolean;
 }): string | undefined => {
+  const parentExt = path.extname(importedFrom);
+
   const doesImportPathEndWithSlash = absImportPathMaybeWithSlash.endsWith("/");
   const absImportPath = path.join(absImportPathMaybeWithSlash, ".");
 
@@ -918,18 +1087,30 @@ export const resolveLocalImport = ({
       else if (knownImportExt === "mjs") knownImportExt = "mts";
       else if (knownImportExt === "jsx") knownImportExt = "tsx";
     }
-    /* eslint-disable security/detect-object-injection */
     const order =
       (type === "import"
         ? EXT_ORDER_MAP_MODULE[knownImportExt]
         : EXT_ORDER_MAP_COMMONJS[knownImportExt]) ?? defaultOrder;
-    /* eslint-enable security/detect-object-injection */
     return (
       t(absImportPath.slice(0, -knownImportExt.length) + knownImportExt) ??
-      resolveLocalImportKnownExt(absImportPath, order, t, resolveAsDirectory)
+      resolveLocalImportKnownExt(
+        absImportPath,
+        order,
+        t,
+        resolveAsDirectory,
+        importedFrom,
+        rawImportPath
+      )
     );
   } else {
-    return resolveLocalImportUnknownExt(absImportPath, defaultOrder, t, resolveAsDirectory);
+    return resolveLocalImportUnknownExt(
+      absImportPath,
+      defaultOrder,
+      t,
+      resolveAsDirectory,
+      importedFrom,
+      rawImportPath
+    );
   }
 };
 
@@ -937,7 +1118,9 @@ const resolveLocalImportUnknownExt = (
   absImportPath: string,
   order: Strategy[],
   t: (filePath: string) => string | undefined,
-  resolveAsDirectory: () => string | undefined
+  resolveAsDirectory: () => string | undefined,
+  importedFrom: string,
+  rawImportPath: string
 ): string | undefined => {
   const file = t(absImportPath) ?? resolveAsDirectory();
   if (file) return file;
@@ -946,13 +1129,17 @@ const resolveLocalImportUnknownExt = (
     const file = runStrategy(absImportPath, strategy, t);
     if (file) return file;
   }
+
+  throw new Error(`Could not find import:\n  ${rawImportPath}\nfrom:\n  ${importedFrom}`);
 };
 
 const resolveLocalImportKnownExt = (
   absImportPath: string,
   order: Strategy[],
   t: (filePath: string) => string | undefined,
-  resolveAsDirectory: () => string | undefined
+  resolveAsDirectory: () => string | undefined,
+  importedFrom: string,
+  rawImportPath: string
 ): string | undefined => {
   const file = resolveAsDirectory();
   if (file) return file;
@@ -966,6 +1153,8 @@ const resolveLocalImportKnownExt = (
     const file = runStrategy(absImportPathWithoutExt, strategy, t);
     if (file) return file;
   }
+
+  throw new Error(`Could not find import:\n  ${rawImportPath}\nfrom:\n  ${importedFrom}`);
 };
 
 const runStrategy = (

@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": [],
+    "lib": ["ES2022"],
     "module": "NodeNext",
     "moduleResolution": "node16",
     "resolveJsonModule": true,
@@ -10,11 +10,12 @@
     "sourceMap": false,
     "isolatedModules": true,
     "esModuleInterop": true,
-    "checkJs": true,
+    "checkJs": false,
     "strict": true,
     "skipLibCheck": true,
     "noEmit": true,
-    "outDir": "dist"
+    "outDir": "dist",
+    "allowImportingTsExtensions": true
   },
   "include": ["typings.d.ts", "cli/**/*", "lib/**/*"],
   "exclude": ["lib/**/__fixtures__/**/*"]

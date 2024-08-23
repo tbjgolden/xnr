@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { execSync, spawn } from "node:child_process";
 import { rmSync } from "node:fs";
 import { getPackageJson, checkDirectory, isFile, isDirectory } from "./lib/utils";
 
@@ -19,6 +19,7 @@ if (await isDirectory("cli")) {
         process.exit(1);
       }
       if (cliName === "xnr") {
+        // validate xnr
         const command = `${cliFilePath} ./.scripts/build-tests`;
         const stdout = execSync(`node ${command}`).toString();
         const expected = `hello world\n{ hello: 'world' }\n`;
@@ -30,7 +31,30 @@ if (await isDirectory("cli")) {
           console.log(JSON.stringify(stdout));
           process.exit(1);
         }
-      } else {
+        {
+          const results = await new Promise<{
+            code: number | null;
+            messages: { type: "stdout" | "stderr"; data: string }[];
+          }>((resolve) => {
+            const messages: { type: "stdout" | "stderr"; data: string }[] = [];
+            const child = spawn("node", [cliFilePath, ".scripts/build-tests/crash-test.ts"]);
+            child.stdout.on("data", (data) => {
+              messages.push({ type: "stdout", data: data.toString() });
+            });
+            child.stderr.on("data", (data) => {
+              messages.push({ type: "stderr", data: data.toString() });
+            });
+            child.on("exit", (code) => {
+              resolve({
+                code,
+                messages,
+              });
+            });
+          });
+          console.log(results);
+          process.exit(1);
+        }
+      } else if (cliName === "xnrb") {
         const command = `${cliFilePath} ./.scripts/build-tests build-tests`;
         const stdout = execSync(`node ${command}`).toString();
         const expected = "build-tests/build-tests/index.mjs\n";
@@ -56,6 +80,8 @@ if (await isDirectory("cli")) {
           process.exit(1);
         }
         rmSync("./build-tests", { recursive: true, force: true });
+      } else {
+        throw new Error(`unexpected cli name: ${cliName}`);
       }
       console.log(`validated 'npx ${cliName}'`);
     }

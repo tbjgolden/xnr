@@ -1,8 +1,3 @@
-/* eslint-disable security/detect-non-literal-fs-filename */
-
-// TODO: remove these when releasing a version that fixes this issue
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore
 import { build, transform, resolveLocalImport } from "./index.ts";
 
 import { fork } from "node:child_process";
@@ -20,6 +15,24 @@ test("transpile each filetype containing imports from every filetype", async () 
 });
 test("transpile each filetype containing imports from every filetype", async () => {
   await testBatch("import-all", new Array(6).fill(JSON.stringify({ hello: "world" })).join("\n"));
+});
+test("__dirname, __filename and import.meta.* is what you'd expect", async () => {
+  const cjsFilePath = "lib/__fixtures__/import-meta/cjs.ts";
+  const [directoryCjs, fileCjs, cwdCjs] = (await runNodeScript(cjsFilePath)).split("\n");
+  expect(fileCjs).toBe(cjsFilePath);
+  expect(directoryCjs).toBe(path.dirname(cjsFilePath));
+  expect(cwdCjs).toBe(process.cwd());
+
+  const mjsFilePath = "lib/__fixtures__/import-meta/mjs.ts";
+  const [directoryMjs, fileMjs, cwdMjs, metaUrl, metaDirname, metaFilename] = (
+    await runNodeScript(mjsFilePath)
+  ).split("\n");
+  expect(fileMjs).toBe(mjsFilePath);
+  expect(directoryMjs).toBe(path.dirname(mjsFilePath));
+  expect(cwdMjs).toBe(process.cwd());
+  expect(metaUrl).toBe("file://" + path.resolve(mjsFilePath));
+  expect(metaDirname).toBe(path.resolve(path.dirname(mjsFilePath)));
+  expect(metaFilename).toBe(path.resolve(mjsFilePath));
 });
 test("can import json from every filetype", async () => {
   await testBatch("import-json", JSON.stringify({ foo: "bar" }));
@@ -42,6 +55,24 @@ test("tsconfig support", async () => {
   await testBatch(
     "tsconfig",
     `z.ts z.z.ts z/index.ts z.z/index.ts z/index.ts z.z/index.ts`.split(" ").join("\n")
+  );
+});
+test("error handling", async () => {
+  await expect(
+    runNodeScript(`lib/__fixtures__/error-handling/cant-resolve.ts`)
+  ).rejects.toThrowError(
+    `Could not find import:\n  ./not-a-real-file\nfrom:\n  ${process.cwd()}/lib/__fixtures__/error-handling/cant-resolve.ts`
+  );
+
+  const syntaxErrorRegex = new RegExp(
+    `^${`Error transforming ${process.cwd()}/lib/__fixtures__/error-handling/syntax-error:`.replaceAll(
+      /[$()*+.?[\\\]^{|}]/g,
+      "\\$&"
+    )}`
+  );
+
+  await expect(runNodeScript(`lib/__fixtures__/error-handling/syntax-error`)).rejects.toThrowError(
+    syntaxErrorRegex
   );
 });
 test("misc old bugs", async () => {
@@ -85,17 +116,18 @@ test("transform", async () => {
 
 test("fallthrough | ts | require | no ext", async () => {
   const checkedFilePaths: string[] = [];
-  expect(
+  expect(() => {
     resolveLocalImport({
-      parentExt: ".ts",
+      importedFrom: "/package/a.ts",
       type: "require",
       absImportPath: "/package/z",
+      rawImportPath: "./z",
       checkFile: (filePath) => {
         checkedFilePaths.push(filePath);
         return false;
       },
-    })
-  ).toBe(undefined);
+    });
+  }).toThrow();
   expect(checkedFilePaths).toEqual([
     "/package/z",
     "/package/z/index.cts",
@@ -115,17 +147,18 @@ test("fallthrough | ts | require | no ext", async () => {
 
 test("fallthrough | ts | require | yes ext", async () => {
   const checkedFilePaths: string[] = [];
-  expect(
+  expect(() => {
     resolveLocalImport({
-      parentExt: ".ts",
+      importedFrom: "/package/a.ts",
       type: "require",
       absImportPath: "/package/z.js",
+      rawImportPath: "./z.js",
       checkFile: (filePath) => {
         checkedFilePaths.push(filePath);
         return false;
       },
-    })
-  ).toBe(undefined);
+    });
+  }).toThrow();
   expect(checkedFilePaths).toEqual([
     "/package/z.ts",
     "/package/z.js/index.cts",
@@ -145,17 +178,18 @@ test("fallthrough | ts | require | yes ext", async () => {
 
 test("fallthrough | ts | import  | no ext", async () => {
   const checkedFilePaths: string[] = [];
-  expect(
+  expect(() => {
     resolveLocalImport({
-      parentExt: ".ts",
+      importedFrom: "/package/a.ts",
       type: "import",
       absImportPath: "/package/z",
+      rawImportPath: "./z",
       checkFile: (filePath) => {
         checkedFilePaths.push(filePath);
         return false;
       },
-    })
-  ).toBe(undefined);
+    });
+  }).toThrow();
   expect(checkedFilePaths).toEqual([
     "/package/z",
     "/package/z/index.mts",
@@ -179,17 +213,18 @@ test("fallthrough | ts | import  | no ext", async () => {
 
 test("fallthrough | ts | import  | yes ext", async () => {
   const checkedFilePaths: string[] = [];
-  expect(
+  expect(() => {
     resolveLocalImport({
-      parentExt: ".ts",
+      importedFrom: "/package/a.ts",
       type: "import",
       absImportPath: "/package/z.js",
+      rawImportPath: "./z.js",
       checkFile: (filePath) => {
         checkedFilePaths.push(filePath);
         return false;
       },
-    })
-  ).toBe(undefined);
+    });
+  }).toThrow();
   expect(checkedFilePaths).toEqual([
     "/package/z.ts",
     "/package/z.js/index.mts",
@@ -213,17 +248,18 @@ test("fallthrough | ts | import  | yes ext", async () => {
 
 test("fallthrough | js | require | no ext", async () => {
   const checkedFilePaths: string[] = [];
-  expect(
+  expect(() => {
     resolveLocalImport({
-      parentExt: ".js",
+      importedFrom: "/package/a.js",
       type: "require",
       absImportPath: "/package/z",
+      rawImportPath: "./z",
       checkFile: (filePath) => {
         checkedFilePaths.push(filePath);
         return false;
       },
-    })
-  ).toBe(undefined);
+    });
+  }).toThrow();
   expect(checkedFilePaths).toEqual([
     "/package/z",
     "/package/z/index.cjs",
@@ -243,17 +279,18 @@ test("fallthrough | js | require | no ext", async () => {
 
 test("fallthrough | js | require | yes ext", async () => {
   const checkedFilePaths: string[] = [];
-  expect(
+  expect(() => {
     resolveLocalImport({
-      parentExt: ".js",
+      importedFrom: "/package/a.js",
       type: "require",
       absImportPath: "/package/z.js",
+      rawImportPath: "./z.js",
       checkFile: (filePath) => {
         checkedFilePaths.push(filePath);
         return false;
       },
-    })
-  ).toBe(undefined);
+    });
+  }).toThrow();
   expect(checkedFilePaths).toEqual([
     "/package/z.js",
     "/package/z.js/index.cjs",
@@ -273,17 +310,18 @@ test("fallthrough | js | require | yes ext", async () => {
 
 test("fallthrough | js | import  | no ext", async () => {
   const checkedFilePaths: string[] = [];
-  expect(
+  expect(() => {
     resolveLocalImport({
-      parentExt: ".js",
       type: "import",
+      importedFrom: "/package/a.js",
       absImportPath: "/package/z",
+      rawImportPath: "./z",
       checkFile: (filePath) => {
         checkedFilePaths.push(filePath);
         return false;
       },
-    })
-  ).toBe(undefined);
+    });
+  }).toThrow();
   expect(checkedFilePaths).toEqual([
     "/package/z",
     "/package/z/index.mjs",
@@ -307,17 +345,18 @@ test("fallthrough | js | import  | no ext", async () => {
 
 test("fallthrough | js | import  | yes ext", async () => {
   const checkedFilePaths: string[] = [];
-  expect(
+  expect(() => {
     resolveLocalImport({
-      parentExt: ".js",
       type: "import",
+      importedFrom: "/package/a.js",
       absImportPath: "/package/z.js",
+      rawImportPath: "./z.js",
       checkFile: (filePath) => {
         checkedFilePaths.push(filePath);
         return false;
       },
-    })
-  ).toBe(undefined);
+    });
+  }).toThrow();
   expect(checkedFilePaths).toEqual([
     "/package/z.js",
     "/package/z.js/index.mjs",
@@ -341,30 +380,25 @@ test("fallthrough | js | import  | yes ext", async () => {
 
 // Test helpers
 
-const runNodeScript = async (
-  entryFilePath: string,
-  outputDirectory = path.join(process.cwd(), ".xnrb")
-): Promise<string> => {
+const runNodeScript = async (entryFilePath: string): Promise<string> => {
+  const outputDirectory = path.join(process.cwd(), "node_modules/.cache/xnr");
+
   const absoluteEntryFilePath = path.resolve(entryFilePath);
-  const outputEntryFilePath = await build(absoluteEntryFilePath, outputDirectory);
-  if (outputEntryFilePath === undefined) {
-    throw new Error("outputEntryFilePath is undefined");
-  } else {
-    return new Promise<string>((resolve) => {
-      const child = fork(outputEntryFilePath, [], { stdio: "pipe" });
-      let stdout = "";
-      child.stdout?.on("data", (data) => {
-        stdout += data;
-      });
-      child.stderr?.on("data", (data) => {
-        stdout += data;
-      });
-      child.on("exit", async () => {
-        await fs.promises.rm(outputDirectory, { recursive: true, force: true });
-        resolve(stdout.trim());
-      });
+  const { entrypoint } = await build(absoluteEntryFilePath, outputDirectory);
+  return new Promise<string>((resolve) => {
+    const child = fork(entrypoint, [], { stdio: "pipe" });
+    let stdout = "";
+    child.stdout?.on("data", (data) => {
+      stdout += data;
     });
-  }
+    child.stderr?.on("data", (data) => {
+      stdout += data;
+    });
+    child.on("exit", async () => {
+      await fs.promises.rm(outputDirectory, { recursive: true, force: true });
+      resolve(stdout.trim());
+    });
+  });
 };
 
 const testBatch = async (subdir: string, expected: string) => {
