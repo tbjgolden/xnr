@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { Dolphin } from ".";
 
 export const test = () => {

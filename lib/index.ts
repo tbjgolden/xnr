@@ -9,6 +9,7 @@ import { transform as sucraseTransform } from "sucrase";
 import { getTsconfig, createPathsMatcher } from "get-tsconfig";
 import { resolve as importResolve } from "import-meta-resolve";
 import { parse } from "espree";
+import process from "node:process";
 
 const require = createRequire(import.meta.url);
 
@@ -67,6 +68,7 @@ export const build = async (
   entryFilePath: string,
   outputDirectory: string
 ): Promise<BuildResult> => {
+  /* istanbul ignore next */
   if (process.platform === "win32") {
     throw new Error("xnr does not currently support windows");
   }
@@ -122,13 +124,6 @@ export const build = async (
         type: entryMethod === "require" ? "require" : "import",
         checkFile,
       });
-      if (!actualFilePath) {
-        throw new Error(
-          `Could not resolve "${path.relative(process.cwd(), filePath)}"${
-            parentFilePath ? `\n  from "${path.relative(process.cwd(), parentFilePath)}"` : ""
-          }`
-        );
-      }
 
       const actualFileString = await fs.promises.readFile(actualFilePath, "utf8");
 
@@ -226,13 +221,7 @@ export const build = async (
           outputDirectory,
           outputFilePath.slice(0, outputFilePath.length - path.extname(outputFilePath).length)
         ),
-        {
-          rawInputFile,
-          inputFile,
-          outputFormat,
-          outputFilePath,
-          dependencyMap,
-        },
+        { rawInputFile, inputFile, outputFormat, outputFilePath, dependencyMap },
       ];
     })
   );
@@ -252,23 +241,12 @@ export const build = async (
       );
 
       /* Enable require from esm */
-      const prelude = "#!/usr/bin/env node\n";
-
-      await fs.promises.mkdir(path.join(outputFilePath, ".."), {
-        recursive: true,
-      });
-      await fs.promises.writeFile(outputFilePath, prelude + newFile);
+      await fs.promises.mkdir(path.join(outputFilePath, ".."), { recursive: true });
+      await fs.promises.writeFile(outputFilePath, "#!/usr/bin/env node\n" + newFile);
     })
   );
 
-  if (outputEntryFilePath === "") {
-    throw new Error("Build failed: no entry file found");
-  } else {
-    return {
-      entrypoint: outputEntryFilePath,
-      files,
-    };
-  }
+  return { entrypoint: outputEntryFilePath, files };
 };
 
 /**
@@ -278,8 +256,11 @@ export const run = async (
   entryFilePath: string,
   args: string[] = [],
   nodeArgs: string[] = [],
-  outputDirectory_?: string | undefined
+  outputDirectory_?: string | undefined,
+  writeStdout: (message: string) => void = process.stdout.write.bind(process.stdout),
+  writeStderr: (message: string) => void = process.stderr.write.bind(process.stderr)
 ): Promise<number> => {
+  /* istanbul ignore next */
   if (process.platform === "win32") {
     throw new Error("xnr does not currently support windows");
   }
@@ -307,94 +288,97 @@ export const run = async (
     fs.rmSync(outputDirectory, { recursive: true, force: true });
   };
 
-  try {
-    const { entrypoint, files } = await build(entryFilePath, outputDirectory);
+  return new Promise<number>((resolve) => {
+    (async () => {
+      try {
+        const { entrypoint, files } = await build(entryFilePath, outputDirectory);
 
-    const outputDirectoryErrorLocationRegex = new RegExp(
-      `(${outputDirectory.replaceAll(/[$()*+.?[\\\]^{|}]/g, "\\$&")}/[^:\n]*):(\\d+)(?::(\\d+))?`,
-      "g"
-    );
+        const outputDirectoryErrorLocationRegex = new RegExp(
+          `(${outputDirectory.replaceAll(/[$()*+.?[\\\]^{|}]/g, "\\$&")}/[^:\n]*)(?::\\d+){0,2}`,
+          "g"
+        );
 
-    const outputToInputFileLookup = new Map<string, string>();
-    for (const { inputFile, outputFilePath } of files) {
-      outputToInputFileLookup.set(outputFilePath, inputFile);
-    }
-
-    const randomBytes = "&nT@r" + "9F2Td";
-
-    const transformErrors = (data: Buffer) => {
-      let dataString = data.toString();
-
-      if (dataString.includes(outputDirectory)) {
-        // Replaces output file paths with input file paths
-        for (const match of [...dataString.matchAll(outputDirectoryErrorLocationRegex)].reverse()) {
-          const file = match[1];
-          const inputFile = outputToInputFileLookup.get(file);
-          if (inputFile) {
-            const nextPartStartIndex = (match.index as number) + match[0].length;
-            dataString = `${dataString.slice(
-              0,
-              match.index ?? 0
-            )}${inputFile}${randomBytes}${dataString.slice(nextPartStartIndex)}`;
-          }
+        const outputToInputFileLookup = new Map<string, string>();
+        for (const { inputFile, outputFilePath } of files) {
+          outputToInputFileLookup.set(outputFilePath, inputFile);
         }
 
-        // Removes the parts of the stack trace that are constant to all xnr runs
-        const inLines = dataString.split("\n");
-        const outLines = [];
-        let hasFoundFirstSourceFile = false;
-        for (let i = inLines.length - 1; i >= 0; i--) {
-          const inLine = inLines[i];
-          if (hasFoundFirstSourceFile) {
-            outLines.push(inLine.replaceAll(randomBytes, ""));
-          } else {
-            if (inLine.startsWith("    at ")) {
-              if (inLine.includes(randomBytes)) {
-                hasFoundFirstSourceFile = true;
-                outLines.push(inLine.replaceAll(randomBytes, ""));
+        const randomBytes = "&nT@r" + "9F2Td";
+
+        const transformErrors = (str: string) => {
+          if (str.includes(outputDirectory)) {
+            // Replaces output file paths with input file paths
+            for (const match of [...str.matchAll(outputDirectoryErrorLocationRegex)].reverse()) {
+              const file = match[1];
+              const inputFile = outputToInputFileLookup.get(file);
+              if (inputFile) {
+                const nextPartStartIndex = (match.index as number) + match[0].length;
+                str = `${str.slice(0, match.index ?? 0)}${inputFile}${randomBytes}${str.slice(
+                  nextPartStartIndex
+                )}`;
               }
-            } else {
-              outLines.push(inLine);
             }
+
+            // Removes the parts of the stack trace that are constant to all xnr runs
+            const inLines = str.split("\n");
+            const outLines = [];
+
+            let hasFoundFirstSourceFile = false;
+            for (let i = inLines.length - 1; i >= 0; i--) {
+              const inLine = inLines[i];
+              if (hasFoundFirstSourceFile) {
+                outLines.push(inLine);
+              } else {
+                if (inLine.startsWith("    at ")) {
+                  if (inLine.includes(randomBytes)) {
+                    hasFoundFirstSourceFile = true;
+                    outLines.push(inLine);
+                  }
+                } else {
+                  outLines.push(inLine);
+                }
+              }
+            }
+            str = outLines.reverse().join("\n").replaceAll(randomBytes, "");
           }
-        }
-        dataString = outLines.reverse().join("\n");
-      }
 
-      return dataString;
-    };
+          return str;
+        };
 
-    process.on("SIGINT", cleanupSync); // CTRL+C
-    process.on("SIGQUIT", cleanupSync); // Keyboard quit
-    process.on("SIGTERM", cleanupSync); // `kill` command
-    return new Promise<number>((resolve) => {
-      const child = spawn("node", [...nodeArgs, entrypoint, ...args], {
-        stdio: [
-          // stdin
-          "inherit",
-          // stdout
-          "inherit",
-          // stderr
-          "pipe",
-        ],
-      });
+        process.on("SIGINT", cleanupSync); // CTRL+C
+        process.on("SIGQUIT", cleanupSync); // Keyboard quit
+        process.on("SIGTERM", cleanupSync); // `kill` command
+        const child = spawn("node", [...nodeArgs, entrypoint, ...args], {
+          stdio: [
+            // stdin
+            "inherit",
+            // stdout
+            "pipe",
+            // stderr
+            "pipe",
+          ],
+        });
 
-      child.stderr?.on("data", (data) => {
-        process.stderr.write(transformErrors(data));
-      });
+        child.stdout.on("data", (data: Buffer) => {
+          writeStdout(stripAnsi(data.toString()));
+        });
+        child.stderr.on("data", (data: Buffer) => {
+          writeStderr(transformErrors(stripAnsi(data.toString())));
+        });
 
-      child.on("exit", async (code) => {
-        process.off("SIGINT", cleanupSync); // CTRL+C
-        process.off("SIGQUIT", cleanupSync); // Keyboard quit
-        process.off("SIGTERM", cleanupSync); // `kill` command
+        child.on("exit", async (code) => {
+          process.off("SIGINT", cleanupSync); // CTRL+C
+          process.off("SIGQUIT", cleanupSync); // Keyboard quit
+          process.off("SIGTERM", cleanupSync); // `kill` command
+          cleanupSync();
+          resolve(code ?? 0);
+        });
+      } catch {
         cleanupSync();
-        resolve(code ?? 0);
-      });
-    });
-  } catch (error) {
-    cleanupSync();
-    throw error;
-  }
+        resolve(1);
+      }
+    })();
+  });
 };
 
 // ----------------------------------------------------------------
@@ -779,6 +763,9 @@ const transformAST = async (
               },
             ];
           }
+        } else if (isRequireMainRequire(node)) {
+          const value = ensure(node.arguments[0].value);
+          node.arguments[0] = asLiteral(value);
         }
 
         break;
@@ -842,6 +829,24 @@ const replaceNode = (node: Node, replacement: Node) => {
   }
 };
 
+// const getStringValueFromStringishNode = (node: Node): string | undefined => {
+//   let result: string | undefined;
+//   const { type, value, quasis, tag, quasi } = node.arguments[0];
+//   if (type === "Literal" || type === "StringLiteral") result = value;
+//   if (type === "TemplateLiteral") result = quasis[0].value.cooked;
+//   if (
+//     type === "TaggedTemplateExpression" &&
+//     tag.type === "MemberExpression" &&
+//     tag.object.type === "Identifier" &&
+//     tag.object.name === "String" &&
+//     tag.property.type === "Identifier" &&
+//     tag.property.name === "raw"
+//   ) {
+//     result = quasi.quasis[0].value.cooked;
+//   }
+//   return result;
+// };
+
 const asLiteral = (value: string) => {
   return {
     type: "Literal",
@@ -863,6 +868,24 @@ const isCreateRequire = (node: Node) => {
   const c = node.callee;
   return (
     c && node.type === "CallExpression" && c.type === "Identifier" && c.name === "createRequire"
+  );
+};
+
+const isRequireMainRequire = (node: Node) => {
+  if (!node) return false;
+
+  const c = node.callee;
+  return (
+    c &&
+    node.type === "CallExpression" &&
+    c.type === "MemberExpression" &&
+    c.object.type === "MemberExpression" &&
+    c.object.object.type === "Identifier" &&
+    c.object.object.name === "require" &&
+    c.object.property.type === "Identifier" &&
+    c.object.property.name === "main" &&
+    c.property.type === "Identifier" &&
+    c.property.name === "require"
   );
 };
 
@@ -1048,7 +1071,7 @@ export const resolveLocalImport = ({
   rawImportPath: string;
   importedFrom: string;
   checkFile: (filePath: string) => boolean;
-}): string | undefined => {
+}): string => {
   const parentExt = path.extname(importedFrom);
 
   const doesImportPathEndWithSlash = absImportPathMaybeWithSlash.endsWith("/");
@@ -1078,7 +1101,12 @@ export const resolveLocalImport = ({
     }
   };
 
-  if (doesImportPathEndWithSlash) return resolveAsDirectory();
+  if (doesImportPathEndWithSlash) {
+    const resolved = resolveAsDirectory();
+    if (resolved) {
+      return resolved;
+    }
+  }
 
   let knownImportExt = getKnownExt(absImportPath);
   if (knownImportExt) {
@@ -1122,7 +1150,7 @@ const resolveLocalImportUnknownExt = (
   resolveAsDirectory: () => string | undefined,
   importedFrom: string,
   rawImportPath: string
-): string | undefined => {
+): string => {
   const file = t(absImportPath) ?? resolveAsDirectory();
   if (file) return file;
 
@@ -1141,7 +1169,7 @@ const resolveLocalImportKnownExt = (
   resolveAsDirectory: () => string | undefined,
   importedFrom: string,
   rawImportPath: string
-): string | undefined => {
+): string => {
   const file = resolveAsDirectory();
   if (file) return file;
 
@@ -1186,4 +1214,12 @@ const runStrategy = (
 const getKnownExt = (filePath: string): KnownExtension | undefined => {
   const match = path.extname(filePath).match(KNOWN_EXT_REGEX);
   return match ? (match[0].slice(1).toLowerCase() as KnownExtension) : undefined;
+};
+
+const stripAnsi = (string: string) => {
+  return string.replaceAll(
+    // eslint-disable-next-line no-control-regex
+    /\u001B\[\d+m/g,
+    ""
+  );
 };
