@@ -277,6 +277,7 @@ export const build = async (
 export const run = async (
   entryFilePath: string,
   args: string[] = [],
+  nodeArgs: string[] = [],
   outputDirectory_?: string | undefined
 ): Promise<number> => {
   if (process.platform === "win32") {
@@ -367,7 +368,7 @@ export const run = async (
     process.on("SIGQUIT", cleanupSync); // Keyboard quit
     process.on("SIGTERM", cleanupSync); // `kill` command
     return new Promise<number>((resolve) => {
-      const child = spawn("node", [entrypoint, ...args], {
+      const child = spawn("node", [...nodeArgs, entrypoint, ...args], {
         stdio: [
           // stdin
           "inherit",
