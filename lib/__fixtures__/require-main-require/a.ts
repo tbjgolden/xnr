@@ -1,5 +1,3 @@
+const { world } = require.main?.require('./b');
 
-
-const { hello } = require.main.require('./b');
-
-console.log(hello())
+console.log(world())

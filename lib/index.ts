@@ -45,9 +45,10 @@ export const transform = async (inputCode: string, filePath?: string): Promise<s
     transforms: ["typescript", ...((filePath ?? ".ts").endsWith(".ts") ? [] : ["jsx" as const])],
     jsxPragma: "React.createClass",
     jsxFragmentPragma: "React.Fragment",
+    filePath,
     enableLegacyTypeScriptModuleInterop: false,
     enableLegacyBabel5ModuleInterop: false,
-    filePath,
+    disableESTransforms: true,
     production: false,
   });
   if (code.startsWith("#!")) {
@@ -415,40 +416,12 @@ const readForDependencies = async (
       case "CallExpression": {
         if (!node || !node.arguments || node.arguments.length === 0) break;
 
-        if (
-          node.callee &&
-          node.type === "CallExpression" &&
-          node.callee.type === "Identifier" &&
-          node.callee.name === "require"
-        ) {
-          let result;
-          const { type, value, quasis, tag, quasi } = node.arguments[0];
-          if (type === "Literal" || type === "StringLiteral") result = value;
-          if (type === "TemplateLiteral") result = quasis[0].value.cooked;
-          if (
-            type === "TaggedTemplateExpression" &&
-            tag.type === "MemberExpression" &&
-            tag.object.type === "Identifier" &&
-            tag.object.name === "String" &&
-            tag.property.type === "Identifier" &&
-            tag.property.name === "raw"
-          ) {
-            result = quasi.quasis[0].value.cooked;
-          }
+        if (isRequire(node)) {
+          const result = getStringValueFromStringishNode(node.arguments[0]);
           if (result) dependencies.push([result, "require", result]);
-        } else if (
-          node.callee &&
-          node.type === "CallExpression" &&
-          node.callee.type === "MemberExpression" &&
-          node.callee.object.type === "MemberExpression" &&
-          node.callee.object.object.type === "Identifier" &&
-          node.callee.object.object.name === "require" &&
-          node.callee.object.property.type === "Identifier" &&
-          node.callee.object.property.name === "main" &&
-          node.callee.property.type === "Identifier" &&
-          node.callee.property.name === "require"
-        ) {
-          dependencies.push([node.arguments[0].value, "require", node.arguments[0].value]);
+        } else if (isRequireMainRequire(node)) {
+          const result = getStringValueFromStringishNode(node.arguments[0]);
+          if (result) dependencies.push([result, "require", result]);
         }
 
         break;
@@ -506,7 +479,7 @@ const transformAST = async (
         dependencyPath = relativePath + (dependencyPath.endsWith("/") ? "/" : "");
       }
 
-      let internalSourceFile;
+      let internalSourceFile: FileResult | undefined;
       {
         const lastIndexOfSlash = relativeInputFile.lastIndexOf("/");
         const pathWithoutSlash =
@@ -517,21 +490,12 @@ const transformAST = async (
 
         if (joinedPath === ".") {
           internalSourceFile = internalSourceFilesMap.get("index");
-        } else if (dependencyPath.endsWith("/")) {
-          internalSourceFile = internalSourceFilesMap.get(joinedPath + "/index");
-          if (internalSourceFile === undefined) {
-            internalSourceFile = internalSourceFilesMap.get(joinedPath);
-          }
-          const ext = path.extname(joinedPath);
-          const withoutExt = ext.length === 0 ? joinedPath : joinedPath.slice(0, -ext.length);
-          if (internalSourceFile === undefined) {
-            internalSourceFile = internalSourceFilesMap.get(withoutExt);
-          }
         } else {
-          internalSourceFile = internalSourceFilesMap.get(joinedPath);
-          if (internalSourceFile === undefined) {
-            internalSourceFile = internalSourceFilesMap.get(joinedPath + "/index");
-          }
+          internalSourceFile = dependencyPath.endsWith("/")
+            ? internalSourceFilesMap.get(joinedPath + "/index") ??
+              internalSourceFilesMap.get(joinedPath)
+            : internalSourceFilesMap.get(joinedPath) ??
+              internalSourceFilesMap.get(joinedPath + "/index");
           const ext = path.extname(joinedPath);
           const withoutExt = ext.length === 0 ? joinedPath : joinedPath.slice(0, -ext.length);
           if (internalSourceFile === undefined) {
@@ -540,6 +504,7 @@ const transformAST = async (
         }
 
         if (internalSourceFile === undefined) {
+          /* istanbul ignore next */
           throw new Error(
             `Could not find a valid import value\nCould not resolve ${joinedPath}[/index.*] from ${relativeInputFile}`
           );
@@ -565,34 +530,9 @@ const transformAST = async (
     switch (node.type) {
       case "ImportExpression": {
         if (node.source) {
-          if (node.source.value) {
-            const value = ensure(node.source.value);
-            node.source = asLiteral(value);
-          } else if (node.source.quasis) {
-            const value = ensure(node.source.quasis[0].value.cooked);
-            node.source.quasis = [
-              {
-                type: "TemplateElement",
-                value: { raw: value, cooked: value },
-                tail: true,
-              },
-            ];
-          } else if (
-            node.source.type === "TaggedTemplateExpression" &&
-            node.source.tag.type === "MemberExpression" &&
-            node.source.tag.object.type === "Identifier" &&
-            node.source.tag.object.name === "String" &&
-            node.source.tag.property.type === "Identifier" &&
-            node.source.tag.property.name === "raw"
-          ) {
-            const value = ensure(node.source.quasi.quasis[0].value.cooked);
-            node.source.quasi.quasis = [
-              {
-                type: "TemplateElement",
-                value: { raw: value, cooked: value },
-                tail: true,
-              },
-            ];
+          const value = getStringValueFromStringishNode(node.source);
+          if (value) {
+            node.source = asLiteral(ensure(value));
           }
         }
         break;
@@ -622,11 +562,11 @@ const transformAST = async (
               let dependencyEntryFilePath: string;
 
               const requireResolve = require.resolve;
-
               try {
                 const fileUrl = importResolve(value, "file://" + inputFile);
                 dependencyEntryFilePath = fileURLToPath(fileUrl);
               } catch {
+                /* istanbul ignore next */
                 try {
                   dependencyEntryFilePath = requireResolve(value, {
                     paths: [inputFile],
@@ -689,11 +629,7 @@ const transformAST = async (
             );
           }
 
-          node.source = {
-            type: "Literal",
-            value,
-            raw: value.includes("'") ? `"${value}"` : `'${value}'`,
-          };
+          node.source = { type: "Literal", value, raw: JSON.stringify(value) };
         }
         break;
       }
@@ -701,11 +637,7 @@ const transformAST = async (
       case "ExportAllDeclaration": {
         if (node.source && node.source.value) {
           const value = ensure(node.source.value);
-          node.source = {
-            type: "Literal",
-            value,
-            raw: value.includes("'") ? `"${value}"` : `'${value}'`,
-          };
+          node.source = { type: "Literal", value, raw: JSON.stringify(value) };
         }
         break;
       }
@@ -726,46 +658,15 @@ const transformAST = async (
             },
           ];
         } else if (isRequire(node)) {
-          if (!node.arguments || node.arguments.length === 0) {
-            break;
-          }
-
-          if (node.arguments[0].type === "Literal" || node.arguments[0].type === "StringLiteral") {
-            const value = ensure(node.arguments[0].value);
-            node.arguments[0] = asLiteral(value);
-          }
-
-          if (node.arguments[0].type === "TemplateLiteral") {
-            const value = ensure(node.arguments[0].quasis[0].value.cooked);
-            node.arguments[0].quasis = [
-              {
-                type: "TemplateElement",
-                value: { raw: value, cooked: value },
-                tail: true,
-              },
-            ];
-          }
-
-          if (
-            node.arguments[0].type === "TaggedTemplateExpression" &&
-            node.arguments[0].tag.type === "MemberExpression" &&
-            node.arguments[0].tag.object.type === "Identifier" &&
-            node.arguments[0].tag.object.name === "String" &&
-            node.arguments[0].tag.property.type === "Identifier" &&
-            node.arguments[0].tag.property.name === "raw"
-          ) {
-            const value = ensure(node.arguments[0].quasi.quasis[0].value.cooked);
-            node.arguments[0].quasi.quasis = [
-              {
-                type: "TemplateElement",
-                value: { raw: value, cooked: value },
-                tail: true,
-              },
-            ];
+          const value = getStringValueFromStringishNode(node.arguments[0]);
+          if (value) {
+            node.arguments[0] = asLiteral(ensure(value));
           }
         } else if (isRequireMainRequire(node)) {
-          const value = ensure(node.arguments[0].value);
-          node.arguments[0] = asLiteral(value);
+          const value = getStringValueFromStringishNode(node.arguments[0]);
+          if (value) {
+            node.arguments[0] = asLiteral(ensure(value));
+          }
         }
 
         break;
@@ -784,11 +685,16 @@ const transformAST = async (
             replaceNode(node.parent, asLiteral(path.dirname(inputFile)));
           } else if (metaName === "filename") {
             replaceNode(node.parent, asLiteral(inputFile));
-          } else if (metaName === "resolve") {
-            replaceNode(
-              node.parent,
-              asLiteral(importResolve(node.parent.parent.arguments[0].value, "file://" + inputFile))
-            );
+          } else if (metaName === "resolve" && node.parent?.parent?.type === "CallExpression") {
+            const value = getStringValueFromStringishNode(node.parent.parent.arguments[0]);
+            if (
+              value &&
+              (value.startsWith(".") || value.startsWith("/") || value.startsWith("file://"))
+            ) {
+              node.parent.parent.arguments[0] = asLiteral(
+                new URL(value, `file://${inputFile}`).href
+              );
+            }
           }
         }
         break;
@@ -816,43 +722,40 @@ const transformAST = async (
 };
 
 const replaceNode = (node: Node, replacement: Node) => {
-  if (node.parent?.splice === undefined) {
-    // object
+  if (node.parent?.splice) {
+    node.parent.splice(node.parent.indexOf(node), 1, replacement);
+  } else {
+    /* istanbul ignore next */
     for (const [key, value] of Object.entries(node.parent)) {
       if (value === node) {
         node.parent[key] = replacement;
       }
     }
-  } else {
-    // array
-    node.parent.splice(node.parent.indexOf(node), 1, replacement);
   }
 };
 
-// const getStringValueFromStringishNode = (node: Node): string | undefined => {
-//   let result: string | undefined;
-//   const { type, value, quasis, tag, quasi } = node.arguments[0];
-//   if (type === "Literal" || type === "StringLiteral") result = value;
-//   if (type === "TemplateLiteral") result = quasis[0].value.cooked;
-//   if (
-//     type === "TaggedTemplateExpression" &&
-//     tag.type === "MemberExpression" &&
-//     tag.object.type === "Identifier" &&
-//     tag.object.name === "String" &&
-//     tag.property.type === "Identifier" &&
-//     tag.property.name === "raw"
-//   ) {
-//     result = quasi.quasis[0].value.cooked;
-//   }
-//   return result;
-// };
+const getStringValueFromStringishNode = (node: Node): string | undefined => {
+  const { type, value, quasis, tag, quasi } = node;
+  if (type === "Literal" || type === "StringLiteral") {
+    return value;
+  }
+  if (type === "TemplateLiteral") {
+    return quasis[0].value.cooked;
+  }
+  if (
+    type === "TaggedTemplateExpression" &&
+    tag.type === "MemberExpression" &&
+    tag.object.type === "Identifier" &&
+    tag.object.name === "String" &&
+    tag.property.type === "Identifier" &&
+    tag.property.name === "raw"
+  ) {
+    return quasi.quasis[0].value.cooked;
+  }
+};
 
 const asLiteral = (value: string) => {
-  return {
-    type: "Literal",
-    value,
-    raw: value.includes("'") ? `"${value}"` : `'${value}'`,
-  };
+  return { type: "Literal", value, raw: JSON.stringify(value) };
 };
 
 const isRequire = (node: Node) => {

@@ -17,6 +17,17 @@ test("run a file directly (error)", async () => {
   ).resolves.not.toBe(0);
 });
 
+test("run a file directly (error finding dir)", async () => {
+  await expect(
+    run(
+      "lib/__fixtures__/error-handling/cant-resolve-dir.ts",
+      [],
+      [],
+      "node_modules/.cache/xnr-run-test"
+    )
+  ).resolves.not.toBe(0);
+});
+
 test("run a file directly (doesn't exist)", async () => {
   await expect(
     run("lib/__fixtures__/a/b/c", [], [], "node_modules/.cache/xnr-run-test")

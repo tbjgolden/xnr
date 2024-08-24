@@ -8,3 +8,5 @@ console.log(process.cwd());
 console.log(import.meta.url);
 console.log(import.meta.dirname);
 console.log(import.meta.filename);
+console.log(import.meta.resolve('./cjs.ts'));
+console.log(import.meta.resolve('prettier'));

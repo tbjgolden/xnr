@@ -25,15 +25,24 @@ test("__dirname, __filename and import.meta.* is what you'd expect", async () =>
   expect(cwdCjs).toBe(process.cwd());
 
   const mjsFilePath = "lib/__fixtures__/import-meta/mjs.ts";
-  const [directoryMjs, fileMjs, cwdMjs, metaUrl, metaDirname, metaFilename] = (
-    await runNodeScript(mjsFilePath)
-  ).split("\n");
+  const [
+    directoryMjs,
+    fileMjs,
+    cwdMjs,
+    metaUrl,
+    metaDirname,
+    metaFilename,
+    metaResolvedLocal,
+    metaResolvedExternal,
+  ] = (await runNodeScript(mjsFilePath)).split("\n");
   expect(fileMjs).toBe(mjsFilePath);
   expect(directoryMjs).toBe(path.dirname(mjsFilePath));
   expect(cwdMjs).toBe(process.cwd());
   expect(metaUrl).toBe("file://" + path.resolve(mjsFilePath));
   expect(metaDirname).toBe(path.resolve(path.dirname(mjsFilePath)));
   expect(metaFilename).toBe(path.resolve(mjsFilePath));
+  expect(metaResolvedLocal).toBe("file://" + path.resolve(cjsFilePath));
+  expect(metaResolvedExternal).toBe("file://" + path.resolve("node_modules/prettier/index.js"));
 });
 test("can import json from every filetype", async () => {
   await testBatch("import-json", JSON.stringify({ foo: "bar" }));
@@ -80,10 +89,15 @@ test("supports export from", async () => {
   expect(await runNodeScript("lib/__fixtures__/export-from/a.ts")).toBe("hello");
 });
 test("supports require(`...`)", async () => {
-  expect(await runNodeScript("lib/__fixtures__/require-template/a.ts")).toBe("hello world");
+  expect(await runNodeScript("lib/__fixtures__/require-template/a.ts")).toBe("'hello world'");
 });
 test("supports require main require", async () => {
-  expect(await runNodeScript("lib/__fixtures__/require-main-require/a.ts")).toBe("hello");
+  expect(await runNodeScript("lib/__fixtures__/require-main-require/a.ts")).toBe("world");
+});
+test("handles external deps", async () => {
+  expect(await runNodeScript("lib/__fixtures__/external-dep/a.mjs")).toBe("{}");
+  expect(await runNodeScript("lib/__fixtures__/external-dep/b.cjs")).toBe("{}");
+  expect(await runNodeScript("lib/__fixtures__/external-dep/c.ts")).toBe("Program");
 });
 test("misc old bugs", async () => {
   expect(await runNodeScript("lib/__fixtures__/import-dot/index.test.ts")).toBe("magic");
@@ -124,7 +138,7 @@ const runNodeScript = async (entryFilePath: string): Promise<string> => {
       stdout += data;
     });
     child.on("exit", async () => {
-      // await fs.promises.rm(outputDirectory, { recursive: true, force: true });
+      await fs.promises.rm(outputDirectory, { recursive: true, force: true });
       resolve(stdout.trim());
     });
   });
