@@ -32,7 +32,7 @@ if (await isDirectory("cli")) {
           process.exit(1);
         }
         {
-          const results = await new Promise<{
+          const { code, messages } = await new Promise<{
             code: number | null;
             messages: { type: "stdout" | "stderr"; data: string }[];
           }>((resolve) => {
@@ -51,8 +51,26 @@ if (await isDirectory("cli")) {
               });
             });
           });
-          console.log(results);
-          process.exit(1);
+
+          if (code !== 1) {
+            console.log(`Expected exit code to be 1, was ${code}`);
+            process.exit(1);
+          }
+          if (messages[0]?.type !== "stdout" || messages[0]?.data !== "log\n") {
+            console.log(`Expected first log to be to stdout with "log\\n"`);
+            console.log(messages[0].data);
+            process.exit(1);
+          }
+          if (
+            messages[1]?.type !== "stderr" ||
+            (messages[1]?.data ?? "").split("\n")[0] !==
+              `file://${process.cwd()}/.scripts/build-tests/crash-test.ts`
+          ) {
+            console.log(
+              `Expected second log to be to stderr ending with "build-tests/crash-test.ts"`
+            );
+            process.exit(1);
+          }
         }
       } else if (cliName === "xnrb") {
         const command = `${cliFilePath} ./.scripts/build-tests build-tests`;
