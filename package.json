@@ -41,8 +41,8 @@
     "prepare": "simple-git-hooks"
   },
   "dependencies": {
+    "acorn": "^8.12.1",
     "astring": "^1.8.6",
-    "espree": "^10.1.0",
     "get-tsconfig": "^4.7.6",
     "import-meta-resolve": "^4.1.0",
     "sucrase": "^3.35.0"

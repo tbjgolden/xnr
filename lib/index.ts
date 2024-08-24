@@ -8,7 +8,7 @@ import { generate } from "astring";
 import { transform as sucraseTransform } from "sucrase";
 import { getTsconfig, createPathsMatcher } from "get-tsconfig";
 import { resolve as importResolve } from "import-meta-resolve";
-import { parse } from "espree";
+import { parse } from "acorn";
 import process from "node:process";
 
 const require = createRequire(import.meta.url);
