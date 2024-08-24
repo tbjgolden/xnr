@@ -933,11 +933,7 @@ const KNOWN_EXT_REGEX = /\.([jt]sx?|[cm][jt]s)$/i;
 type KnownExtension = "js" | "ts" | "jsx" | "tsx" | "cjs" | "cts" | "mjs" | "mts";
 type Strategy = "ts>tsx" | "tsx>ts" | "mts" | "cts" | "mjs" | "cjs" | "js>jsx" | "jsx>js";
 
-type ExtOrderMap = {
-  [k in KnownExtension]?: Strategy[] | undefined;
-};
-
-const EXT_ORDER_MAP_MODULE: ExtOrderMap = {
+const EXT_ORDER_MAP_MODULE = {
   // ts
   ts: ["ts>tsx", "mts", "mjs", "js>jsx", "cts", "cjs"],
   tsx: ["tsx>ts", "jsx>js", "mts", "mjs", "cts", "cjs"],
@@ -947,9 +943,10 @@ const EXT_ORDER_MAP_MODULE: ExtOrderMap = {
   jsx: ["jsx>js", "tsx>ts", "mjs", "mts", "cjs", "cts"],
   cjs: ["cjs", "cts", "jsx>js", "tsx>ts", "mjs", "mts"],
   mjs: ["mjs", "mts", "js>jsx", "ts>tsx", "cjs", "cts"],
-  // js, json* can use default order
-};
-const EXT_ORDER_MAP_COMMONJS: ExtOrderMap = {
+  // use default order
+  js: undefined,
+} as const;
+const EXT_ORDER_MAP_COMMONJS = {
   // ts
   ts: ["ts>tsx", "js>jsx", "cts", "cjs"],
   tsx: ["tsx>ts", "jsx>js", "cts", "cjs"],
@@ -959,8 +956,9 @@ const EXT_ORDER_MAP_COMMONJS: ExtOrderMap = {
   jsx: ["jsx>js", "tsx>ts", "cjs", "cts"],
   cjs: ["cjs", "cts", "jsx>js", "tsx>ts"],
   mjs: ["mjs", "mts", "js>jsx", "ts>tsx", "cjs", "cts"],
-  // js, json* can use default order
-};
+  // use default order
+  js: undefined,
+} as const;
 
 export const resolveLocalImport = ({
   type,
@@ -975,30 +973,35 @@ export const resolveLocalImport = ({
   importedFrom: string;
   checkFile: (filePath: string) => boolean;
 }): string => {
-  const parentExt = path.extname(importedFrom);
+  const parentExt = path.extname(importedFrom).slice(1);
 
   const doesImportPathEndWithSlash = absImportPathMaybeWithSlash.endsWith("/");
   const absImportPath = path.join(absImportPathMaybeWithSlash, ".");
 
-  const isFileTsLike = Boolean(parentExt.includes("ts"));
-
-  let defaultOrder: Strategy[];
-  if (type === "import") {
-    defaultOrder = isFileTsLike
-      ? ["mts", "mjs", "ts>tsx", "js>jsx", "cts", "cjs"]
-      : ["mjs", "mts", "js>jsx", "ts>tsx", "cjs", "cts"];
-  } else {
-    defaultOrder = isFileTsLike
-      ? ["cts", "cjs", "ts>tsx", "js>jsx"]
-      : ["cjs", "cts", "js>jsx", "ts>tsx"];
+  const isParentTsFile = ["ts", "mts", "tsx", "cts"].includes(parentExt);
+  let knownImportExt = getKnownExt(absImportPath);
+  if (knownImportExt && isParentTsFile) {
+    // Recent versions of TypeScript ask users to import .*ts* files as .*js*
+    if (knownImportExt === "js") knownImportExt = "ts";
+    else if (knownImportExt === "cjs") knownImportExt = "cts";
+    else if (knownImportExt === "mjs") knownImportExt = "mts";
+    else if (knownImportExt === "jsx") knownImportExt = "tsx";
   }
+
+  // other includes js, json and unknown/missing extensions
+  const otherExtOrder =
+    type === "import"
+      ? EXT_ORDER_MAP_MODULE[parentExt as KnownExtension] ??
+        EXT_ORDER_MAP_MODULE[isParentTsFile ? "mts" : "mjs"]
+      : EXT_ORDER_MAP_MODULE[parentExt as KnownExtension] ??
+        EXT_ORDER_MAP_MODULE[isParentTsFile ? "cts" : "cjs"];
 
   const t = (filePath: string): string | undefined => {
     if (checkFile(filePath)) return filePath;
   };
 
   const resolveAsDirectory = () => {
-    for (const strategy of defaultOrder) {
+    for (const strategy of otherExtOrder) {
       const file = runStrategy(absImportPath + "/index", strategy, t);
       if (file) return file;
     }
@@ -1011,18 +1014,11 @@ export const resolveLocalImport = ({
     }
   }
 
-  let knownImportExt = getKnownExt(absImportPath);
   if (knownImportExt) {
-    if (isFileTsLike) {
-      if (knownImportExt === "js") knownImportExt = "ts";
-      else if (knownImportExt === "cjs") knownImportExt = "cts";
-      else if (knownImportExt === "mjs") knownImportExt = "mts";
-      else if (knownImportExt === "jsx") knownImportExt = "tsx";
-    }
     const order =
       (type === "import"
         ? EXT_ORDER_MAP_MODULE[knownImportExt]
-        : EXT_ORDER_MAP_COMMONJS[knownImportExt]) ?? defaultOrder;
+        : EXT_ORDER_MAP_COMMONJS[knownImportExt]) ?? otherExtOrder;
     return (
       t(absImportPath.slice(0, -knownImportExt.length) + knownImportExt) ??
       resolveLocalImportKnownExt(
@@ -1037,7 +1033,7 @@ export const resolveLocalImport = ({
   } else {
     return resolveLocalImportUnknownExt(
       absImportPath,
-      defaultOrder,
+      otherExtOrder,
       t,
       resolveAsDirectory,
       importedFrom,
@@ -1048,7 +1044,7 @@ export const resolveLocalImport = ({
 
 const resolveLocalImportUnknownExt = (
   absImportPath: string,
-  order: Strategy[],
+  order: ReadonlyArray<Strategy>,
   t: (filePath: string) => string | undefined,
   resolveAsDirectory: () => string | undefined,
   importedFrom: string,
@@ -1067,7 +1063,7 @@ const resolveLocalImportUnknownExt = (
 
 const resolveLocalImportKnownExt = (
   absImportPath: string,
-  order: Strategy[],
+  order: ReadonlyArray<Strategy>,
   t: (filePath: string) => string | undefined,
   resolveAsDirectory: () => string | undefined,
   importedFrom: string,

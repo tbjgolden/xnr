@@ -2,8 +2,9 @@ import { build, run } from "./index.ts";
 
 import { fork } from "node:child_process";
 import path from "node:path/posix";
-import fs from "node:fs";
+import fs from "node:fs/promises";
 import process from "node:process";
+import { tmpdir } from "node:os";
 
 test("transpile one file of each extension", async () => {
   await testBatch("single", JSON.stringify({ hello: "world" }));
@@ -99,6 +100,15 @@ test("handles external deps", async () => {
   expect(await runNodeScript("lib/__fixtures__/external-dep/b.cjs")).toBe("{}");
   expect(await runNodeScript("lib/__fixtures__/external-dep/c.ts")).toBe("Program");
 });
+test("in tmpdir outside ts project", async () => {
+  const entryPath = tmpdir() + "/xnr-run-test/test.ts";
+  const entryDirectory = path.join(entryPath, "..");
+  await fs.rm(entryDirectory, { recursive: true, force: true });
+  await fs.mkdir(entryDirectory, { recursive: true });
+  await fs.writeFile(entryPath, 'console.log("test" as string);');
+  expect(await runNodeScript(entryPath)).toBe("test");
+  await fs.rm(entryDirectory, { recursive: true, force: true });
+});
 test("misc old bugs", async () => {
   expect(await runNodeScript("lib/__fixtures__/import-dot/index.test.ts")).toBe("magic");
   expect(await runNodeScript("lib/__fixtures__/import-dot-index/index.test.ts")).toBe("magic");
@@ -138,14 +148,14 @@ const runNodeScript = async (entryFilePath: string): Promise<string> => {
       stdout += data;
     });
     child.on("exit", async () => {
-      await fs.promises.rm(outputDirectory, { recursive: true, force: true });
+      await fs.rm(outputDirectory, { recursive: true, force: true });
       resolve(stdout.trim());
     });
   });
 };
 
 const testBatch = async (subdir: string, expected: string) => {
-  const dirents = await fs.promises.readdir(path.join(process.cwd(), "lib/__fixtures__", subdir), {
+  const dirents = await fs.readdir(path.join(process.cwd(), "lib/__fixtures__", subdir), {
     withFileTypes: true,
   });
 
