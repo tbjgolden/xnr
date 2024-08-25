@@ -142,7 +142,10 @@ const runNodeScript = async (entryFilePath: string): Promise<string> => {
   const outputDirectory = path.join(process.cwd(), "node_modules/.cache/xnr");
 
   const absoluteEntryFilePath = path.resolve(entryFilePath);
-  const { entrypoint } = await build(absoluteEntryFilePath, outputDirectory);
+  const { entrypoint } = await build({
+    filePath: absoluteEntryFilePath,
+    outputDirectory,
+  });
   return new Promise<string>((resolve) => {
     const child = fork(entrypoint, [], { stdio: "pipe" });
     let stdout = "";
