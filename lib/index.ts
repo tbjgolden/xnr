@@ -399,27 +399,17 @@ const readForDependencies = async (
 ) => {
   const dependencies: Array<[string, "import" | "require", string]> = [];
 
+  const pushSourceAsDep = (node: { source?: Expression | Literal | null | undefined }) => {
+    if (isNodeStringLiteral(node.source)) {
+      dependencies.push([node.source.value, "import", node.source.value]);
+    }
+  };
+
   simple(ast, {
-    ImportExpression(node) {
-      if (isNodeStringLiteral(node.source)) {
-        dependencies.push([node.source.value, "import", node.source.value]);
-      }
-    },
-    ImportDeclaration(node) {
-      if (isNodeStringLiteral(node.source)) {
-        dependencies.push([node.source.value, "import", node.source.value]);
-      }
-    },
-    ExportNamedDeclaration(node) {
-      if (isNodeStringLiteral(node.source)) {
-        dependencies.push([node.source.value, "import", node.source.value]);
-      }
-    },
-    ExportAllDeclaration(node) {
-      if (isNodeStringLiteral(node.source)) {
-        dependencies.push([node.source.value, "import", node.source.value]);
-      }
-    },
+    ImportExpression: pushSourceAsDep,
+    ImportDeclaration: pushSourceAsDep,
+    ExportNamedDeclaration: pushSourceAsDep,
+    ExportAllDeclaration: pushSourceAsDep,
     CallExpression(node) {
       if (isRequire(node)) {
         const result = getStringNodeValue(node.arguments[0]);
@@ -526,15 +516,22 @@ const transformAST = async (
 
   const promises: Array<Promise<void>> = [];
 
+  const rewriteSourceString = (toRewrite: AnyNode | null | undefined) => {
+    const value = getStringNodeValue(toRewrite);
+    if (toRewrite && value) {
+      replaceNode(toRewrite, asLiteral(ensure(value)));
+    }
+  };
+  const rewriteNodeWithSource = (node: { source?: AnyNode | null | undefined }) => {
+    rewriteSourceString(node.source);
+  };
+  const rewriteNodeWithSourceAsFirstArg = (node: { arguments?: AnyNode[] }) => {
+    const arg = node.arguments?.[0];
+    rewriteSourceString(arg);
+  };
+
   ancestor(ast, {
-    ImportExpression(node) {
-      if (node.source) {
-        const value = getStringNodeValue(node.source);
-        if (value) {
-          node.source = asLiteral(ensure(value));
-        }
-      }
-    },
+    ImportExpression: rewriteNodeWithSource,
     ImportDeclaration(node, _, ancestors) {
       const parent = ancestors.at(-2) as AnyNode | undefined;
       if (isNodeStringLiteral(node.source) && parent && parent.type === "Program") {
@@ -645,18 +642,8 @@ const transformAST = async (
         node.source = asLiteral(value);
       }
     },
-    ExportNamedDeclaration(node) {
-      if (isNodeStringLiteral(node.source)) {
-        const value = ensure(node.source.value);
-        node.source = asLiteral(value);
-      }
-    },
-    ExportAllDeclaration(node) {
-      if (isNodeStringLiteral(node.source)) {
-        const value = ensure(node.source.value);
-        node.source = asLiteral(value);
-      }
-    },
+    ExportNamedDeclaration: rewriteNodeWithSource,
+    ExportAllDeclaration: rewriteNodeWithSource,
     CallExpression(node) {
       if (isCreateRequire(node)) {
         node.arguments = [
@@ -677,10 +664,7 @@ const transformAST = async (
           },
         ];
       } else if (isRequire(node)) {
-        const value = getStringNodeValue(node.arguments[0]);
-        if (value) {
-          node.arguments[0] = asLiteral(ensure(value));
-        }
+        rewriteNodeWithSourceAsFirstArg(node);
       } else if (isRequireMainRequire(node)) {
         const value = getStringNodeValue(node.arguments[0]);
         if (value) {
@@ -731,7 +715,7 @@ const transformAST = async (
   return generate(ast);
 };
 
-const getStringNodeValue = (node: AnyNode | undefined): string | undefined => {
+const getStringNodeValue = (node: AnyNode | null | undefined): string | undefined => {
   if (node) {
     if (node.type === "Literal" && typeof node.value === "string") {
       return node.value;
@@ -997,7 +981,7 @@ export const resolveLocalImport = ({
 };
 
 const isNodeStringLiteral = (
-  node: Expression | null | undefined
+  node: AnyNode | null | undefined
 ): node is Literal & { value: string; raw: string } => {
   return node
     ? node.type === "Literal" && typeof node.value === "string" && typeof node.raw === "string"
