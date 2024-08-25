@@ -86,6 +86,11 @@ test("error handling", async () => {
     syntaxErrorRegex
   );
 });
+test("supports import * as x from", async () => {
+  expect(await runNodeScript("lib/__fixtures__/import-star/a.ts")).toBe(
+    '{"b":{"a":"a","b":"b","c":"c"}}'
+  );
+});
 test("supports export from", async () => {
   expect(await runNodeScript("lib/__fixtures__/export-from/a.ts")).toBe("hello");
 });
@@ -98,7 +103,7 @@ test("supports require main require", async () => {
 test("handles external deps", async () => {
   expect(await runNodeScript("lib/__fixtures__/external-dep/a.mjs")).toBe("{}");
   expect(await runNodeScript("lib/__fixtures__/external-dep/b.cjs")).toBe("{}");
-  expect(await runNodeScript("lib/__fixtures__/external-dep/c.ts")).toBe("Program");
+  expect(await runNodeScript("lib/__fixtures__/external-dep/c.ts")).toMatch("hello world!");
 });
 test("in tmpdir outside ts project", async () => {
   const entryPath = tmpdir() + "/xnr-run-test/test.ts";
@@ -148,7 +153,7 @@ const runNodeScript = async (entryFilePath: string): Promise<string> => {
       stdout += data;
     });
     child.on("exit", async () => {
-      await fs.rm(outputDirectory, { recursive: true, force: true });
+      // await fs.rm(outputDirectory, { recursive: true, force: true });
       resolve(stdout.trim());
     });
   });

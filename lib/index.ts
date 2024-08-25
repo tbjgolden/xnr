@@ -8,17 +8,24 @@ import { generate } from "astring";
 import { transform as sucraseTransform } from "sucrase";
 import { getTsconfig, createPathsMatcher } from "get-tsconfig";
 import { resolve as importResolve } from "import-meta-resolve";
-import { parse } from "acorn";
+import {
+  AnyNode,
+  AssignmentProperty,
+  Expression,
+  Literal,
+  Options,
+  parse,
+  VariableDeclaration,
+} from "acorn";
+import { simple, ancestor, findNodeAt } from "acorn-walk";
 import process from "node:process";
 
 const require = createRequire(import.meta.url);
 
-const parseModule = (a: Parameters<typeof parse>[0], b?: Parameters<typeof parse>[1]) => {
+const parseModule = (a: string, b?: Options) => {
   return parse(a, { ...b, sourceType: "module", ecmaVersion: "latest" });
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Node = any;
 type AST = ReturnType<typeof parseModule>;
 type ResolveData = {
   baseUrl: string | null;
@@ -392,43 +399,36 @@ const readForDependencies = async (
 ) => {
   const dependencies: Array<[string, "import" | "require", string]> = [];
 
-  traverse(ast, (node: Node) => {
-    switch (node.type) {
-      case "ImportExpression": {
-        if (node.source && node.source.value) {
-          dependencies.push([node.source.value, "import", node.source.value]);
-        }
-        break;
+  simple(ast, {
+    ImportExpression(node) {
+      if (isNodeStringLiteral(node.source)) {
+        dependencies.push([node.source.value, "import", node.source.value]);
       }
-      case "ImportDeclaration": {
-        if (node.source && node.source.value) {
-          dependencies.push([node.source.value, "import", node.source.value]);
-        }
-        break;
+    },
+    ImportDeclaration(node) {
+      if (isNodeStringLiteral(node.source)) {
+        dependencies.push([node.source.value, "import", node.source.value]);
       }
-      case "ExportNamedDeclaration":
-      case "ExportAllDeclaration": {
-        if (node.source && node.source.value) {
-          dependencies.push([node.source.value, "import", node.source.value]);
-        }
-        break;
+    },
+    ExportNamedDeclaration(node) {
+      if (isNodeStringLiteral(node.source)) {
+        dependencies.push([node.source.value, "import", node.source.value]);
       }
-      case "CallExpression": {
-        if (!node || !node.arguments || node.arguments.length === 0) break;
-
-        if (isRequire(node)) {
-          const result = getStringValueFromStringishNode(node.arguments[0]);
-          if (result) dependencies.push([result, "require", result]);
-        } else if (isRequireMainRequire(node)) {
-          const result = getStringValueFromStringishNode(node.arguments[0]);
-          if (result) dependencies.push([result, "require", result]);
-        }
-
-        break;
+    },
+    ExportAllDeclaration(node) {
+      if (isNodeStringLiteral(node.source)) {
+        dependencies.push([node.source.value, "import", node.source.value]);
       }
-      default:
-      // nothing
-    }
+    },
+    CallExpression(node) {
+      if (isRequire(node)) {
+        const result = getStringNodeValue(node.arguments[0]);
+        if (result) dependencies.push([result, "require", result]);
+      } else if (isRequireMainRequire(node)) {
+        const result = getStringNodeValue(node.arguments[0]);
+        if (result) dependencies.push([result, "require", result]);
+      }
+    },
   });
 
   // apply resolve logic here
@@ -526,194 +526,204 @@ const transformAST = async (
 
   const promises: Array<Promise<void>> = [];
 
-  traverse(ast, async (node: Node) => {
-    switch (node.type) {
-      case "ImportExpression": {
-        if (node.source) {
-          const value = getStringValueFromStringishNode(node.source);
-          if (value) {
-            node.source = asLiteral(ensure(value));
-          }
+  ancestor(ast, {
+    ImportExpression(node) {
+      if (node.source) {
+        const value = getStringNodeValue(node.source);
+        if (value) {
+          node.source = asLiteral(ensure(value));
         }
-        break;
       }
-      case "ImportDeclaration": {
-        if (node.importKind === "type") break;
-        if (node.source && node.source.value) {
-          const defaultImport = node.specifiers.find((node: Node) => {
-            return !node.imported;
-          })?.local?.name;
-          const namedImports = node.specifiers
-            .filter((node: Node) => {
-              return node.imported;
-            })
-            .map(({ local, imported }: { local: { name: string }; imported: { name: string } }) => {
-              return [imported.name, local.name];
-            });
-          const value = ensure(node.source.value);
-          const isExternalDependency = !(
-            value.startsWith(".") ||
-            value.startsWith("/") ||
-            isNodeBuiltin(value)
-          );
+    },
+    ImportDeclaration(node, _, ancestors) {
+      const parent = ancestors.at(-2) as AnyNode | undefined;
+      if (isNodeStringLiteral(node.source) && parent && parent.type === "Program") {
+        const defaultImport = node.specifiers.find((node) => node.type === "ImportDefaultSpecifier")
+          ?.local?.name;
+        const namedImports = node.specifiers
+          .filter((node) => node.type === "ImportSpecifier")
+          .map((node): [string | undefined, string] => {
+            return [
+              node.imported.type === "Identifier" ? node.imported.name : getStringNodeValue(node),
+              node.local.name,
+            ];
+          })
+          .filter((value): value is [string, string] => value[0] !== undefined);
 
-          if (namedImports.length > 0 && isExternalDependency) {
-            const getDependencyEntryFilePath = async () => {
-              let dependencyEntryFilePath: string;
+        const value = ensure(node.source.value);
+        const isExternalDependency = !(
+          value.startsWith(".") ||
+          value.startsWith("/") ||
+          isNodeBuiltin(value)
+        );
 
-              const requireResolve = require.resolve;
+        if (namedImports.length > 0 && isExternalDependency) {
+          const getDependencyEntryFilePath = async () => {
+            let dependencyEntryFilePath: string;
+
+            const requireResolve = require.resolve;
+            try {
+              const fileUrl = importResolve(value, "file://" + inputFile);
+              dependencyEntryFilePath = fileURLToPath(fileUrl);
+            } catch {
+              /* istanbul ignore next */
               try {
-                const fileUrl = importResolve(value, "file://" + inputFile);
-                dependencyEntryFilePath = fileURLToPath(fileUrl);
+                dependencyEntryFilePath = requireResolve(value, {
+                  paths: [inputFile],
+                });
               } catch {
-                /* istanbul ignore next */
-                try {
-                  dependencyEntryFilePath = requireResolve(value, {
-                    paths: [inputFile],
-                  });
-                } catch {
-                  throw new Error(
-                    `Could not import/require ${JSON.stringify(value)} from ${JSON.stringify(
-                      inputFile
-                    )}`
-                  );
-                }
+                throw new Error(
+                  `Could not import/require ${JSON.stringify(value)} from ${JSON.stringify(
+                    inputFile
+                  )}`
+                );
               }
+            }
 
-              return dependencyEntryFilePath;
-            };
+            return dependencyEntryFilePath;
+          };
 
-            promises.push(
-              getDependencyEntryFilePath()
-                .then((dependencyEntryFilePath) =>
-                  determineModuleTypeFromPath(dependencyEntryFilePath)
-                )
-                .then((dependencyModuleType) => {
-                  if (dependencyModuleType === ".cjs") {
-                    const uniqueID = defaultImport ?? `xnr_${randomUUID().slice(-12)}`;
+          promises.push(
+            getDependencyEntryFilePath()
+              .then((dependencyEntryFilePath) =>
+                determineModuleTypeFromPath(dependencyEntryFilePath)
+              )
+              .then((dependencyModuleType) => {
+                if (dependencyModuleType === ".cjs") {
+                  const uniqueID = defaultImport ?? `xnr_${randomUUID().slice(-12)}`;
 
-                    const cjs = {
-                      type: "VariableDeclaration",
-                      declarations: [
-                        {
-                          type: "VariableDeclarator",
-                          id: {
-                            type: "ObjectPattern",
-                            properties: namedImports.map(([key, value]: [string, string]) => {
+                  const cjs: VariableDeclaration = {
+                    type: "VariableDeclaration",
+                    declarations: [
+                      {
+                        type: "VariableDeclarator",
+                        id: {
+                          type: "ObjectPattern",
+                          properties: namedImports.map(
+                            ([key, value]: [string, string]): AssignmentProperty => {
                               return {
                                 type: "Property",
-                                key: { type: "Identifier", name: key },
+                                key: { type: "Identifier", name: key, start: -1, end: -1 },
                                 computed: false,
-                                value: { type: "Identifier", name: value },
+                                value: { type: "Identifier", name: value, start: -1, end: -1 },
                                 kind: "init",
                                 method: false,
                                 shorthand: key === value,
+                                start: -1,
+                                end: -1,
                               };
-                            }),
-                          },
-                          init: { type: "Identifier", name: uniqueID },
+                            }
+                          ),
+                          start: -1,
+                          end: -1,
                         },
-                      ],
-                      kind: "const",
-                    };
-
-                    node.specifiers = [
-                      {
-                        type: "ImportDefaultSpecifier",
-                        local: { type: "Identifier", name: uniqueID },
+                        init: { type: "Identifier", name: uniqueID, start: -1, end: -1 },
+                        start: -1,
+                        end: -1,
                       },
-                    ];
-                    node.parent.splice(node.parent.indexOf(node) + 1, 0, cjs);
-                  }
-                })
-            );
-          }
+                    ],
+                    kind: "const",
+                    start: -1,
+                    end: -1,
+                  };
 
-          node.source = { type: "Literal", value, raw: JSON.stringify(value) };
+                  node.specifiers = [
+                    {
+                      type: "ImportDefaultSpecifier",
+                      local: { type: "Identifier", name: uniqueID, start: -1, end: -1 },
+                      start: -1,
+                      end: -1,
+                    },
+                  ];
+
+                  parent.body.splice(parent.body.indexOf(node) + 1, 0, cjs);
+                }
+              })
+          );
         }
-        break;
+
+        node.source = asLiteral(value);
       }
-      case "ExportNamedDeclaration":
-      case "ExportAllDeclaration": {
-        if (node.source && node.source.value) {
-          const value = ensure(node.source.value);
-          node.source = { type: "Literal", value, raw: JSON.stringify(value) };
-        }
-        break;
+    },
+    ExportNamedDeclaration(node) {
+      if (isNodeStringLiteral(node.source)) {
+        const value = ensure(node.source.value);
+        node.source = asLiteral(value);
       }
-      case "CallExpression": {
-        if (isCreateRequire(node)) {
-          node.arguments = [
-            {
-              type: "MemberExpression",
-              object: {
-                type: "MetaProperty",
-                meta: { type: "Identifier", name: "import" },
-                property: { type: "Identifier", name: "meta" },
-                __dnr: true,
-              },
-              property: { type: "Identifier", name: "url" },
-              computed: false,
-              optional: false,
+    },
+    ExportAllDeclaration(node) {
+      if (isNodeStringLiteral(node.source)) {
+        const value = ensure(node.source.value);
+        node.source = asLiteral(value);
+      }
+    },
+    CallExpression(node) {
+      if (isCreateRequire(node)) {
+        node.arguments = [
+          {
+            type: "MemberExpression",
+            object: {
+              type: "MetaProperty",
+              meta: { type: "Identifier", name: "import", start: -1, end: -1 },
+              property: { type: "Identifier", name: "meta", start: -1, end: -1 },
+              start: -1,
+              end: -1,
             },
-          ];
-        } else if (isRequire(node)) {
-          const value = getStringValueFromStringishNode(node.arguments[0]);
-          if (value) {
-            node.arguments[0] = asLiteral(ensure(value));
-          }
-        } else if (isRequireMainRequire(node)) {
-          const value = getStringValueFromStringishNode(node.arguments[0]);
-          if (value) {
-            node.arguments[0] = asLiteral(ensure(value));
+            property: { type: "Identifier", name: "url", start: -1, end: -1 },
+            computed: false,
+            optional: false,
+            start: -1,
+            end: -1,
+          },
+        ];
+      } else if (isRequire(node)) {
+        const value = getStringNodeValue(node.arguments[0]);
+        if (value) {
+          node.arguments[0] = asLiteral(ensure(value));
+        }
+      } else if (isRequireMainRequire(node)) {
+        const value = getStringNodeValue(node.arguments[0]);
+        if (value) {
+          node.arguments[0] = asLiteral(ensure(value));
+        }
+      }
+    },
+    MetaProperty(node, _, ancestors) {
+      const parent = ancestors.at(-2) as AnyNode | undefined;
+      const grandParent = ancestors.at(-3) as AnyNode | undefined;
+      if (
+        node.meta.name === "import" &&
+        node.property.name === "meta" &&
+        parent?.type === "MemberExpression"
+      ) {
+        const metaName =
+          parent.property.type === "Identifier"
+            ? parent.property.name
+            : getStringNodeValue(parent.property);
+        if (metaName === "url") {
+          replaceNode(parent, asLiteral(`file://${inputFile}`));
+        } else if (metaName === "dirname") {
+          replaceNode(parent, asLiteral(path.dirname(inputFile)));
+        } else if (metaName === "filename") {
+          replaceNode(parent, asLiteral(inputFile));
+        } else if (metaName === "resolve" && grandParent?.type === "CallExpression") {
+          const value = getStringNodeValue(grandParent.arguments[0]);
+          if (
+            value &&
+            (value.startsWith(".") || value.startsWith("/") || value.startsWith("file://"))
+          ) {
+            grandParent.arguments[0] = asLiteral(new URL(value, `file://${inputFile}`).href);
           }
         }
-
-        break;
       }
-      case "MetaProperty": {
-        if (
-          !node.__dnr &&
-          node.meta.name === "import" &&
-          node.property.name === "meta" &&
-          node.parent?.type === "MemberExpression"
-        ) {
-          const metaName = node.parent.property.name;
-          if (metaName === "url") {
-            replaceNode(node.parent, asLiteral(`file://${inputFile}`));
-          } else if (metaName === "dirname") {
-            replaceNode(node.parent, asLiteral(path.dirname(inputFile)));
-          } else if (metaName === "filename") {
-            replaceNode(node.parent, asLiteral(inputFile));
-          } else if (metaName === "resolve" && node.parent?.parent?.type === "CallExpression") {
-            const value = getStringValueFromStringishNode(node.parent.parent.arguments[0]);
-            if (
-              value &&
-              (value.startsWith(".") || value.startsWith("/") || value.startsWith("file://"))
-            ) {
-              node.parent.parent.arguments[0] = asLiteral(
-                new URL(value, `file://${inputFile}`).href
-              );
-            }
-          }
-        }
-        break;
+    },
+    Identifier(node, _) {
+      if (node.name === "__dirname") {
+        replaceNode(node, asLiteral(path.relative(process.cwd(), path.dirname(inputFile))));
+      } else if (node.name === "__filename") {
+        replaceNode(node, asLiteral(path.relative(process.cwd(), inputFile)));
       }
-      case "Identifier": {
-        {
-          if (node.parent?.type !== "VariableDeclarator") {
-            if (node.name === "__dirname") {
-              replaceNode(node, asLiteral(path.relative(process.cwd(), path.dirname(inputFile))));
-            } else if (node.name === "__filename") {
-              replaceNode(node, asLiteral(path.relative(process.cwd(), inputFile)));
-            }
-          }
-        }
-        break;
-      }
-      default:
-      // nothing
-    }
+    },
   });
 
   await Promise.all(promises);
@@ -721,74 +731,72 @@ const transformAST = async (
   return generate(ast);
 };
 
-const replaceNode = (node: Node, replacement: Node) => {
-  if (node.parent?.splice) {
-    node.parent.splice(node.parent.indexOf(node), 1, replacement);
-  } else {
-    /* istanbul ignore next */
-    for (const [key, value] of Object.entries(node.parent)) {
-      if (value === node) {
-        node.parent[key] = replacement;
-      }
+const getStringNodeValue = (node: AnyNode | undefined): string | undefined => {
+  if (node) {
+    if (node.type === "Literal" && typeof node.value === "string") {
+      return node.value;
+    }
+    if (node.type === "TemplateLiteral") {
+      return node.quasis[0].value.cooked ?? undefined;
+    }
+    if (
+      node.type === "TaggedTemplateExpression" &&
+      node.tag.type === "MemberExpression" &&
+      node.tag.object.type === "Identifier" &&
+      node.tag.object.name === "String" &&
+      node.tag.property.type === "Identifier" &&
+      node.tag.property.name === "raw"
+    ) {
+      return node.quasi.quasis[0].value.cooked ?? undefined;
     }
   }
 };
 
-const getStringValueFromStringishNode = (node: Node): string | undefined => {
-  const { type, value, quasis, tag, quasi } = node;
-  if (type === "Literal" || type === "StringLiteral") {
-    return value;
+const replaceNode = (nodeToReplace: AnyNode, replacement: AnyNode): void => {
+  for (const key of Object.keys(nodeToReplace)) {
+    delete nodeToReplace[key as keyof AnyNode];
   }
-  if (type === "TemplateLiteral") {
-    return quasis[0].value.cooked;
-  }
-  if (
-    type === "TaggedTemplateExpression" &&
-    tag.type === "MemberExpression" &&
-    tag.object.type === "Identifier" &&
-    tag.object.name === "String" &&
-    tag.property.type === "Identifier" &&
-    tag.property.name === "raw"
-  ) {
-    return quasi.quasis[0].value.cooked;
-  }
+  Object.assign(nodeToReplace, replacement);
 };
 
-const asLiteral = (value: string) => {
-  return { type: "Literal", value, raw: JSON.stringify(value) };
+const asLiteral = (value: string): Literal & { value: string; raw: string } => {
+  return { type: "Literal", value, raw: JSON.stringify(value), start: -1, end: -1 };
 };
 
-const isRequire = (node: Node) => {
-  if (!node) return false;
-
-  const c = node.callee;
-  return c && node.type === "CallExpression" && c.type === "Identifier" && c.name === "require";
-};
-
-const isCreateRequire = (node: Node) => {
-  if (!node) return false;
-
-  const c = node.callee;
-  return (
-    c && node.type === "CallExpression" && c.type === "Identifier" && c.name === "createRequire"
+const isRequire = (node: AnyNode) => {
+  return Boolean(
+    node &&
+      node.type === "CallExpression" &&
+      node.callee &&
+      node.callee.type === "Identifier" &&
+      node.callee.name === "require"
   );
 };
 
-const isRequireMainRequire = (node: Node) => {
-  if (!node) return false;
+const isCreateRequire = (node: AnyNode) => {
+  return Boolean(
+    node &&
+      node.type === "CallExpression" &&
+      node.callee &&
+      node.callee.type === "Identifier" &&
+      node.callee.name === "createRequire"
+  );
+};
 
-  const c = node.callee;
-  return (
-    c &&
-    node.type === "CallExpression" &&
-    c.type === "MemberExpression" &&
-    c.object.type === "MemberExpression" &&
-    c.object.object.type === "Identifier" &&
-    c.object.object.name === "require" &&
-    c.object.property.type === "Identifier" &&
-    c.object.property.name === "main" &&
-    c.property.type === "Identifier" &&
-    c.property.name === "require"
+const isRequireMainRequire = (node: AnyNode) => {
+  return Boolean(
+    node &&
+      node.type === "CallExpression" &&
+      node.type === "CallExpression" &&
+      node.callee &&
+      node.callee.type === "MemberExpression" &&
+      node.callee.object.type === "MemberExpression" &&
+      node.callee.object.object.type === "Identifier" &&
+      node.callee.object.object.name === "require" &&
+      node.callee.object.property.type === "Identifier" &&
+      node.callee.object.property.name === "main" &&
+      node.callee.property.type === "Identifier" &&
+      node.callee.property.name === "require"
   );
 };
 
@@ -799,80 +807,26 @@ const isNodeBuiltin = (dependency: string): boolean => {
   return BUILTINS.has(dependency);
 };
 
-const traverse = (node: Node, perNode: (node: Node) => void) => {
-  if (Array.isArray(node)) {
-    for (const key of node) {
-      if (isObject(key)) {
-        key.parent = node;
-        traverse(key as Node, perNode);
-      }
-    }
-  } else if (node && isObject(node)) {
-    perNode(node);
-
-    for (const [key, value] of Object.entries(node)) {
-      if (key === "parent" || !value) continue;
-      if (isObject(value)) {
-        value.parent = node;
-      }
-      traverse(value, perNode);
-    }
-  }
-};
-
-const isObject = (value: unknown): value is Record<string, unknown> => {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-};
-
 // -------------------------------------------------------------
 
+const MODULE_ONLY_NODE_TYPE_SET = new Set([
+  "ExportAllDeclaration",
+  "ExportDefaultDeclaration",
+  "ExportNamedDeclaration",
+  "ExportSpecifier",
+  "ImportAttribute",
+  "ImportDeclaration",
+  "ImportDefaultSpecifier",
+  "ImportNamespaceSpecifier",
+  "ImportSpecifier",
+]);
+
 const determineModuleTypeFromAST = async (ast: AST) => {
-  let hasFoundExport = false;
-
-  const traverse = (node: Node, perNode: (input: Node) => void) => {
-    if (hasFoundExport) return;
-
-    if (Array.isArray(node)) {
-      for (const key of node) {
-        if (isObject(key)) {
-          key.parent = node;
-          traverse(key, perNode);
-        }
-      }
-    } else if (node && isObject(node)) {
-      perNode(node);
-
-      for (const [key, value] of Object.entries(node)) {
-        if (key === "parent" || !value) continue;
-        if (isObject(value)) {
-          value.parent = node;
-        }
-        traverse(value, perNode);
-      }
-    }
-  };
-
-  traverse(ast, async (node: Node) => {
-    switch (node.type) {
-      case "ExportAllDeclaration":
-      case "ExportDefaultDeclaration":
-      case "ExportNamedDeclaration":
-      case "ExportSpecifier":
-      case "ImportAttribute":
-      case "ImportDeclaration":
-      case "ImportDefaultSpecifier":
-      case "ImportNamespaceSpecifier":
-      case "ImportSpecifier": {
-        hasFoundExport = true;
-        break;
-      }
-      default:
-      // nothing
-      // note "ImportExpression" not included as import() can appear in cjs
-    }
-  });
-
-  return hasFoundExport ? ".mjs" : ".cjs";
+  return findNodeAt(ast, undefined, undefined, (nodeType) =>
+    MODULE_ONLY_NODE_TYPE_SET.has(nodeType)
+  )
+    ? ".mjs"
+    : ".cjs";
 };
 
 const determineModuleTypeFromPath = async (
@@ -1040,6 +994,14 @@ export const resolveLocalImport = ({
       rawImportPath
     );
   }
+};
+
+const isNodeStringLiteral = (
+  node: Expression | null | undefined
+): node is Literal & { value: string; raw: string } => {
+  return node
+    ? node.type === "Literal" && typeof node.value === "string" && typeof node.raw === "string"
+    : false;
 };
 
 const resolveLocalImportUnknownExt = (

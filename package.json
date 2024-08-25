@@ -42,6 +42,7 @@
   },
   "dependencies": {
     "acorn": "^8.12.1",
+    "acorn-walk": "^8.3.3",
     "astring": "^1.8.6",
     "get-tsconfig": "^4.7.6",
     "import-meta-resolve": "^4.1.0",
