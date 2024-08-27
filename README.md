@@ -27,82 +27,36 @@ npx xnr any-file.{ts,tsx,cts,mts,js,jsx,cjs,mjs}
 > JavaScript, and then performs fast AST manipulations to make the interop work - no
 > tsc/babel/esbuild/swc here_
 
-## Benchmarks
+## Key benchmarks
 
-| runner   | single TS file | big TS project | install time | install size | compat #1 | compat #2 | compat #3 | compat #4 |
-| -------- | -------------: | -------------: | -----------: | -----------: | :-------: | :-------: | :-------: | :-------: |
-| xnr      |      `0.14`sec |      `0.56`sec |    `4.82`sec |      `3.9`MB |    ✅     |    ✅     |    ✅     |    ✅     |
-| esr      |      `0.08`sec |      `0.12`sec |    `7.71`sec |     `10.6`MB |    ✅     |    ✅     |    ✅     |    ❌     |
-| swc-node |      `0.22`sec |      `0.38`sec |   `37.88`sec |     `95.1`MB |    ✅     |    ✅     |    ❌     |    ❌     |
-| ts-node  |      `0.65`sec |      `1.60`sec |   `16.10`sec |     `45.2`MB |    ✅     |    ❌     |    ❌     |    ❌     |
+| runner    | npx single-ts-file | (preinstalled) | install size |
+| --------- | -----------------: | -------------: | -----------: |
+| xnr@1.1.4 |         `0.814`sec |     `0.294`sec |      `6.7`MB |
+| esr       |         `1.819`sec |     `0.347`sec |     `29.9`MB |
+| swc-node  |         `5.387`sec |     `0.164`sec |     `62.0`MB |
+| ts-node\* |         `0.945`sec |     `0.760`sec |      `6.7`MB |
 
-> <details>
->
-> <summary><strong>Methodology</strong></summary>
->
-> ### single ts file
->
-> ```ts
-> const run = (date: Date): void => {
->   console.log(
->     [
->       date.getFullYear(),
->       (date.getMonth() + 1).toString().padStart(2, "0"),
->       date.getDate().toString().padStart(2, "0"),
->     ].join("-")
->   );
-> };
->
-> run(new Date(3000, 0, 1));
-> ```
->
-> ### big ts project + compat tests
->
-> Measured by running a simple script that imports the `date-fn` (TypeScript) > source files
-> directly.
->
-> ```ts
-> // repo:date-fns/src/index.ts
-> import { format } from "(date-fns-source)";
-> // where `(date-fn-source)` =>
-> //   #1 `./src`
-> //   #2 `./src/index.ts`
-> //   #3 `./src/index.js`
-> //   #4 `./src` with `"type": "module"` in package.json
-> // support for each import path varies by runner
->
-> const run = (): void => {
->   console.log(format(new Date(3000, 0, 1), "yyyy-MM-dd"));
-> };
->
-> run();
-> ```
->
-> ### the actual script
->
-> ```sh
-> echo "xnr:"
-> start_timer && node ./node_modules/.bin/xnr ./file.ts && print_timer
-> echo "ts-node:"
-> start_timer && node ./node_modules/.bin/ts-node ./file.ts && print_timer
-> echo "esr:"
-> start_timer && node ./node_modules/.bin/esr ./file.ts && print_timer
-> echo "swc-node:"
-> start_timer && node -r @swc-node/register ./file.ts && print_timer
-> ```
->
-> 2023-05-12, 3 run avg, MacBook Pro w/ M1 Pro
->
-> ### byte size
->
-> installed required dependencies with npm into an empty dir, then:  
-> `rm package.json && rm package-lock.json && du -sk .`
->
-> ### install time
->
-> tested with my (slow 😢) 1.5MB/s Wi-Fi download speed (no cache, 3 run avg)
->
-> </details>
+\* does a type check. ~200ms faster with --transpile-only
+
+<details>
+
+<summary><em>Test file</em></summary>
+
+```ts
+const run = (date: Date): void => {
+  console.log(
+    [
+      date.getFullYear(),
+      (date.getMonth() + 1).toString().padStart(2, "0"),
+      date.getDate().toString().padStart(2, "0"),
+    ].join("-")
+  );
+};
+
+run(new Date(3000, 0, 1));
+```
+
+</details>
 
 ## Getting Started
 
