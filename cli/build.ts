@@ -8,7 +8,7 @@ if (args.length === 0) {
   console.log("$> xnrb entryFile.ts [outDir?= dist]");
   process.exit(1);
 } else {
-  const [fileToRun, outputDirectory] = args;
-  const { entrypoint } = await build(fileToRun, outputDirectory);
+  const [filePath, outputDirectory] = args;
+  const { entrypoint } = await build({ filePath, outputDirectory });
   console.log(relative(process.cwd(), entrypoint));
 }

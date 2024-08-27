@@ -289,7 +289,7 @@ export const run = async (filePathOrConfig: string | RunConfig): Promise<number>
     filePath,
     args = [],
     nodeArgs = [],
-    outputDirectory: outputDirectory_,
+    outputDirectory: outputDirectory_ = undefined,
     writeStdout = process.stdout.write.bind(process.stdout),
     writeStderr = process.stderr.write.bind(process.stderr),
   } = typeof filePathOrConfig === "string" ? { filePath: filePathOrConfig } : filePathOrConfig;

@@ -2,12 +2,19 @@
 /* eslint-disable no-console */
 import { run } from "../lib/index.js";
 
-const args = process.argv.slice(2);
-if (args.length === 0) {
+const allArgs = process.argv.slice(2);
+if (allArgs.length === 0) {
   console.log("$> xnr fileToRun.js");
   process.exit(1);
 } else {
-  const [fileToRun, ...scriptArgs] = args;
-  const code = await run(fileToRun, scriptArgs);
+  let nodeArgs: string[] = [];
+  let scriptArgs: string[] = allArgs;
+  if (allArgs.includes("--")) {
+    const index = allArgs.indexOf("--");
+    nodeArgs = allArgs.slice(0, index);
+    scriptArgs = allArgs.slice(index + 1);
+  }
+  const [filePath, ...args] = scriptArgs;
+  const code = await run({ filePath, args, nodeArgs });
   process.exit(code);
 }

@@ -44,6 +44,7 @@ module.exports = {
     // "security/detect-object-injection": "off",
     "unicorn/filename-case": "off",
     "unicorn/no-null": "off",
+    "unicorn/no-useless-undefined": "off",
     "unicorn/prevent-abbreviations": [
       "error",
       {

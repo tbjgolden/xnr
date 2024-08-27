@@ -1,12 +1,12 @@
 import { execSync, spawn } from "node:child_process";
 import { rmSync } from "node:fs";
-import { getPackageJson, checkDirectory, isFile, isDirectory } from "./lib/utils";
+import { getPackageJson, checkDirectory, isFile } from "./lib/utils";
 
 checkDirectory();
 
 const packageJson = await getPackageJson();
 
-if (await isDirectory("cli")) {
+{
   console.log("validating cli...");
   for (const [cliName, cliFilePath] of Object.entries(packageJson.bin ?? {})) {
     if (cliFilePath) {
@@ -106,7 +106,7 @@ if (await isDirectory("cli")) {
   }
 }
 
-if (await isDirectory("lib")) {
+{
   console.log("validating api...");
 
   let entrypoint: string | undefined;
@@ -128,10 +128,23 @@ if (await isDirectory("lib")) {
     process.exit(1);
   }
   const { transform } = await import(process.cwd() + "/" + entrypoint);
-  const result = await transform(
-    `const typedFn = (str: string) => console.log(str);\ntypedFn("hello world");`
-  );
+  const result = await transform({
+    code: `const typedFn = (str: string) => console.log(str);\ntypedFn("hello world");`,
+  });
   const expected = 'const typedFn = (str) => console.log(str);\ntypedFn("hello world");';
+  if (result !== expected) {
+    console.log("expected:");
+    console.log(JSON.stringify(expected));
+    console.log("actual:");
+    console.log(JSON.stringify(result));
+    process.exit(1);
+  }
+}
+
+{
+  console.log("validating portable executable...");
+  const result = execSync("dist/xnr lib/__fixtures__/export-from/a.ts").toString();
+  const expected = "hello\n";
   if (result !== expected) {
     console.log("expected:");
     console.log(JSON.stringify(expected));
