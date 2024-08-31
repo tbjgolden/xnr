@@ -102,7 +102,7 @@ export const build = async ({
   const astCache = new Map<string, AST>();
 
   const fsCache = new Map<string, Map<string, string>>();
-  const getResolvedFile = (filePath: string): string | undefined => {
+  const getResolvedFile_ = (filePath: string): string | undefined => {
     const parentDirectory = path.join(filePath, "..");
     const name = filePath.slice(parentDirectory.length + 1);
     let filesSet = fsCache.get(parentDirectory);
@@ -148,7 +148,7 @@ export const build = async ({
         importedFrom: parentFilePath,
         rawImportPath,
         type: entryMethod === "require" ? "require" : "import",
-        getResolvedFile,
+        getResolvedFile: getResolvedFile_,
       });
 
       const actualFileString = await fs.promises.readFile(actualFilePath, "utf8");
@@ -187,7 +187,7 @@ export const build = async ({
           ast,
           resolveData: pathResolvers,
           filePath: actualFilePath,
-          getResolvedFile,
+          getResolvedFile: getResolvedFile_,
         });
         const dependencies = dependenciesData.filter(([dependency]) => {
           return !isNodeBuiltin(dependency);
@@ -1005,7 +1005,7 @@ export const resolveLocalImport = ({
 
   const resolveAsDirectory = () => {
     for (const strategy of otherExtOrder) {
-      const file = runStrategy({ base: absImportPath + "/index", strategy, t });
+      const file = runStrategy({ base: absImportPath + "/index", strategy, getResolvedFile: t });
       if (file) return file;
     }
   };
@@ -1027,7 +1027,7 @@ export const resolveLocalImport = ({
       resolveLocalImportKnownExt({
         absImportPath,
         order,
-        t,
+        getResolvedFile: t,
         resolveAsDirectory,
         importedFrom,
         rawImportPath,
@@ -1037,7 +1037,7 @@ export const resolveLocalImport = ({
     return resolveLocalImportUnknownExt({
       absImportPath,
       order: otherExtOrder,
-      t,
+      getResolvedFile: t,
       resolveAsDirectory,
       importedFrom,
       rawImportPath,
@@ -1060,23 +1060,23 @@ const isNodeStringLiteral = (
 const resolveLocalImportUnknownExt = ({
   absImportPath,
   order,
-  t,
+  getResolvedFile,
   resolveAsDirectory,
   importedFrom,
   rawImportPath,
 }: {
   absImportPath: string;
   order: ReadonlyArray<Strategy>;
-  t: (filePath: string) => string | undefined;
+  getResolvedFile: (filePath: string) => string | undefined;
   resolveAsDirectory: () => string | undefined;
   importedFrom: string;
   rawImportPath: string;
 }): string => {
-  const file = t(absImportPath) ?? resolveAsDirectory();
+  const file = getResolvedFile(absImportPath) ?? resolveAsDirectory();
   if (file) return file;
 
   for (const strategy of order) {
-    const file = runStrategy({ base: absImportPath, strategy, t });
+    const file = runStrategy({ base: absImportPath, strategy, getResolvedFile });
     if (file) return file;
   }
 
@@ -1090,14 +1090,14 @@ const resolveLocalImportUnknownExt = ({
 const resolveLocalImportKnownExt = ({
   absImportPath,
   order,
-  t,
+  getResolvedFile,
   resolveAsDirectory,
   importedFrom,
   rawImportPath,
 }: {
   absImportPath: string;
   order: ReadonlyArray<Strategy>;
-  t: (filePath: string) => string | undefined;
+  getResolvedFile: (filePath: string) => string | undefined;
   resolveAsDirectory: () => string | undefined;
   importedFrom: string;
   rawImportPath: string;
@@ -1111,7 +1111,11 @@ const resolveLocalImportKnownExt = ({
   );
 
   for (const strategy of order) {
-    const file = runStrategy({ base: absImportPathWithoutExt, strategy, t });
+    const file = runStrategy({
+      base: absImportPathWithoutExt,
+      strategy,
+      getResolvedFile,
+    });
     if (file) return file;
   }
 
@@ -1125,29 +1129,29 @@ const resolveLocalImportKnownExt = ({
 const runStrategy = ({
   base,
   strategy,
-  t,
+  getResolvedFile,
 }: {
   base: string;
   strategy: Strategy;
-  t: (filePath: string) => string | undefined;
+  getResolvedFile: (filePath: string) => string | undefined;
 }) => {
   // eslint-disable-next-line unicorn/prefer-switch
   if (strategy === "ts>tsx") {
-    return t(base + ".ts") ?? t(base + ".tsx");
+    return getResolvedFile(base + ".ts") ?? getResolvedFile(base + ".tsx");
   } else if (strategy === "tsx>ts") {
-    return t(base + ".tsx") ?? t(base + ".ts");
+    return getResolvedFile(base + ".tsx") ?? getResolvedFile(base + ".ts");
   } else if (strategy === "js>jsx") {
-    return t(base + ".js") ?? t(base + ".jsx");
+    return getResolvedFile(base + ".js") ?? getResolvedFile(base + ".jsx");
   } else if (strategy === "jsx>js") {
-    return t(base + ".jsx") ?? t(base + ".js");
+    return getResolvedFile(base + ".jsx") ?? getResolvedFile(base + ".js");
   } else if (strategy === "cts") {
-    return t(base + ".cts");
+    return getResolvedFile(base + ".cts");
   } else if (strategy === "mts") {
-    return t(base + ".mts");
+    return getResolvedFile(base + ".mts");
   } else if (strategy === "cjs") {
-    return t(base + ".cjs");
+    return getResolvedFile(base + ".cjs");
   } else {
-    return t(base + ".mjs");
+    return getResolvedFile(base + ".mjs");
   }
 };
 
