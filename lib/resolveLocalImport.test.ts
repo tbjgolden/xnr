@@ -5,7 +5,7 @@ test("fallthrough | ts | require | no ext", async () => {
   expect(() => {
     resolveLocalImport({
       importedFrom: "/package/a.ts",
-      type: "require",
+      method: "require",
       absImportPath: "/package/z",
       rawImportPath: "./z",
       getResolvedFile: (filePath) => {
@@ -40,7 +40,7 @@ test("fallthrough | ts | require | yes ext", async () => {
   expect(() => {
     resolveLocalImport({
       importedFrom: "/package/a.ts",
-      type: "require",
+      method: "require",
       absImportPath: "/package/z.js",
       rawImportPath: "./z.js",
       getResolvedFile: (filePath) => {
@@ -73,7 +73,7 @@ test("fallthrough | ts | import  | no ext", async () => {
   expect(() => {
     resolveLocalImport({
       importedFrom: "/package/a.ts",
-      type: "import",
+      method: "import",
       absImportPath: "/package/z",
       rawImportPath: "./z",
       getResolvedFile: (filePath) => {
@@ -108,7 +108,7 @@ test("fallthrough | ts | import  | yes ext", async () => {
   expect(() => {
     resolveLocalImport({
       importedFrom: "/package/a.ts",
-      type: "import",
+      method: "import",
       absImportPath: "/package/z.js",
       rawImportPath: "./z.js",
       getResolvedFile: (filePath) => {
@@ -143,7 +143,7 @@ test("fallthrough | js | require | no ext", async () => {
   expect(() => {
     resolveLocalImport({
       importedFrom: "/package/a.js",
-      type: "require",
+      method: "require",
       absImportPath: "/package/z",
       rawImportPath: "./z",
       getResolvedFile: (filePath) => {
@@ -178,7 +178,7 @@ test("fallthrough | js | require | yes ext", async () => {
   expect(() => {
     resolveLocalImport({
       importedFrom: "/package/a.js",
-      type: "require",
+      method: "require",
       absImportPath: "/package/z.js",
       rawImportPath: "./z.js",
       getResolvedFile: (filePath) => {
@@ -212,7 +212,7 @@ test("fallthrough | js | import  | no ext", async () => {
   const checkedFilePaths: string[] = [];
   expect(() => {
     resolveLocalImport({
-      type: "import",
+      method: "import",
       importedFrom: "/package/a.js",
       absImportPath: "/package/z",
       rawImportPath: "./z",
@@ -247,7 +247,7 @@ test("fallthrough | js | import  | yes ext", async () => {
   const checkedFilePaths: string[] = [];
   expect(() => {
     resolveLocalImport({
-      type: "import",
+      method: "import",
       importedFrom: "/package/a.js",
       absImportPath: "/package/z.js",
       rawImportPath: "./z.js",

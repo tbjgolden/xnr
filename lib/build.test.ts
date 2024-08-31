@@ -51,13 +51,13 @@ test("can import json from every filetype", async () => {
 test("resolution expected order of priority", async () => {
   await testBatch(
     "resolve",
-    `z.ts z.z.ts z/index.ts z.z/index.ts z/index.ts z.z/index.ts z.ts z.z.ts z/index.ts z.z/index.ts z.ts z.z.ts`
+    `z/index.ts z.z/index.ts z/index.ts z.z/index.ts z/index.ts z.z/index.ts z.ts z.z.ts z/index.ts z.z/index.ts z.ts z.z.ts`
       .split(" ")
       .join("\n")
   );
   await testBatch(
     "resolve2",
-    `z.ts z.z.ts z/index.ts z.z/index.ts z/index.ts z.z/index.ts z.ts z.z.ts z/index.ts z.z/index.ts z.ts z.z.ts`
+    `z/index.ts z.z/index.ts z/index.ts z.z/index.ts z/index.ts z.z/index.ts z.ts z.z.ts z/index.ts z.z/index.ts z.ts z.z.ts`
       .split(" ")
       .join("\n")
   );
@@ -107,10 +107,24 @@ test("supports require(`...`)", async () => {
 test("supports require main require", async () => {
   expect(await runNodeScript("lib/__fixtures__/require-main-require/a.ts")).toBe("world");
 });
+test("handles symlink", async () => {
+  expect(await runNodeScript("lib/__fixtures__/symlink/a.cjs")).toBe("e.cjs");
+});
 test("handles external deps", async () => {
   expect(await runNodeScript("lib/__fixtures__/external-dep/a.mjs")).toBe("{}");
   expect(await runNodeScript("lib/__fixtures__/external-dep/b.cjs")).toBe("{}");
   expect(await runNodeScript("lib/__fixtures__/external-dep/c.ts")).toMatch("hello world!");
+  try {
+    await runNodeScript("lib/__fixtures__/external-dep/unresolvable.mjs");
+    expect("didThrow").toBe(true);
+  } catch (error) {
+    if (error instanceof Error) {
+      expect(error.message).toMatch('Could not import "not-a-real-npm-pkg-m8"');
+      expect(error.message).toMatch("lib/__fixtures__/external-dep/unresolvable.mjs");
+    } else {
+      expect("didThrowError").toBe(true);
+    }
+  }
 });
 test("in tmpdir outside ts project", async () => {
   const entryPath = tmpdir() + "/xnr-run-test/test.ts";
@@ -121,26 +135,18 @@ test("in tmpdir outside ts project", async () => {
   expect(await runNodeScript(entryPath)).toBe("test");
   await fs.rm(entryDirectory, { recursive: true, force: true });
 });
-test("misc old bugs", async () => {
+test("import dot", async () => {
   expect(await runNodeScript("lib/__fixtures__/import-dot/index.test.ts")).toBe("magic");
+});
+test("import dot index", async () => {
   expect(await runNodeScript("lib/__fixtures__/import-dot-index/index.test.ts")).toBe("magic");
-  expect(await runNodeScript("lib/__fixtures__/resolve/mjs.mjs")).toBe(
-    `z.ts
-z.z.ts
-z/index.ts
-z.z/index.ts
-z/index.ts
-z.z/index.ts
-z.ts
-z.z.ts
-z/index.ts
-z.z/index.ts
-z.ts
-z.z.ts`
-  );
+});
+test("new ts features", async () => {
   expect(
     await runNodeScript(path.join(process.cwd(), "lib/__fixtures__/new-ts-features/index.test.ts"))
   ).toBe("click click i am lorenzo");
+});
+test("default run dir", async () => {
   // this has to be in build.test instead of run.test to avoid a race condition
   await expect(run("lib/__fixtures__/new-ts-features/index.ts")).resolves.toBe(0);
 });
@@ -163,7 +169,7 @@ const runNodeScript = async (entryFilePath: string): Promise<string> => {
       stdout += data;
     });
     child.on("exit", async () => {
-      // await fs.rm(outputDirectory, { recursive: true, force: true });
+      await fs.rm(outputDirectory, { recursive: true, force: true });
       resolve(stdout.trim());
     });
   });
