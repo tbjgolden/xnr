@@ -101,23 +101,25 @@ export const build = async ({
 
   const astCache = new Map<string, AST>();
 
-  const fsCache = new Map<string, Set<string>>();
-  const checkFile = (filePath: string): boolean => {
+  const fsCache = new Map<string, Map<string, string>>();
+  const getResolvedFile = (filePath: string): string | undefined => {
     const parentDirectory = path.join(filePath, "..");
     const name = filePath.slice(parentDirectory.length + 1);
     let filesSet = fsCache.get(parentDirectory);
     if (!filesSet) {
-      filesSet = new Set<string>();
+      filesSet = new Map<string, string>();
       try {
         for (const dirent of fs.readdirSync(parentDirectory, { withFileTypes: true })) {
           if (dirent.isFile()) {
-            filesSet.add(dirent.name);
+            filesSet.set(dirent.name, dirent.name);
+          } else if (dirent.isSymbolicLink()) {
+            filesSet.set(dirent.name, fs.readlinkSync(path.join(parentDirectory, dirent.name)));
           }
         }
         fsCache.set(parentDirectory, filesSet);
       } catch {}
     }
-    return filesSet.has(name);
+    return filesSet.get(name);
   };
 
   const firstFilePath = path.resolve(process.cwd(), filePath);
@@ -146,7 +148,7 @@ export const build = async ({
         importedFrom: parentFilePath,
         rawImportPath,
         type: entryMethod === "require" ? "require" : "import",
-        checkFile,
+        getResolvedFile,
       });
 
       const actualFileString = await fs.promises.readFile(actualFilePath, "utf8");
@@ -185,7 +187,7 @@ export const build = async ({
           ast,
           resolveData: pathResolvers,
           filePath: actualFilePath,
-          checkFile,
+          getResolvedFile,
         });
         const dependencies = dependenciesData.filter(([dependency]) => {
           return !isNodeBuiltin(dependency);
@@ -445,12 +447,12 @@ const readForDependencies = async ({
   ast,
   resolveData,
   filePath,
-  checkFile,
+  getResolvedFile,
 }: {
   ast: AST;
   resolveData: ResolveData;
   filePath: string;
-  checkFile: (filePath: string) => boolean;
+  getResolvedFile: (filePath: string) => string | undefined;
 }) => {
   const dependencies: Array<[string, "import" | "require", string]> = [];
 
@@ -488,7 +490,7 @@ const readForDependencies = async ({
               absImportPath: match,
               rawImportPath: dependencyPair[0],
               importedFrom: filePath,
-              checkFile,
+              getResolvedFile,
             })
           ) {
             dependencyPair[0] = match;
@@ -966,13 +968,13 @@ export const resolveLocalImport = ({
   absImportPath: absImportPathMaybeWithSlash,
   rawImportPath,
   importedFrom,
-  checkFile,
+  getResolvedFile,
 }: {
   type: "require" | "import";
   absImportPath: string;
   rawImportPath: string;
   importedFrom: string;
-  checkFile: (filePath: string) => boolean;
+  getResolvedFile: (filePath: string) => string | undefined;
 }): string => {
   const parentExt = path.extname(importedFrom).slice(1);
 
@@ -998,7 +1000,7 @@ export const resolveLocalImport = ({
         EXT_ORDER_MAP_MODULE[isParentTsFile ? "cts" : "cjs"];
 
   const t = (filePath: string): string | undefined => {
-    if (checkFile(filePath)) return filePath;
+    if (getResolvedFile(filePath)) return filePath;
   };
 
   const resolveAsDirectory = () => {

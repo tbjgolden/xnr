@@ -8,9 +8,9 @@ test("fallthrough | ts | require | no ext", async () => {
       type: "require",
       absImportPath: "/package/z",
       rawImportPath: "./z",
-      checkFile: (filePath) => {
+      getResolvedFile: (filePath) => {
         checkedFilePaths.push(filePath);
-        return false;
+        return undefined;
       },
     });
   }).toThrow();
@@ -43,9 +43,9 @@ test("fallthrough | ts | require | yes ext", async () => {
       type: "require",
       absImportPath: "/package/z.js",
       rawImportPath: "./z.js",
-      checkFile: (filePath) => {
+      getResolvedFile: (filePath) => {
         checkedFilePaths.push(filePath);
-        return false;
+        return undefined;
       },
     });
   }).toThrow();
@@ -76,9 +76,9 @@ test("fallthrough | ts | import  | no ext", async () => {
       type: "import",
       absImportPath: "/package/z",
       rawImportPath: "./z",
-      checkFile: (filePath) => {
+      getResolvedFile: (filePath) => {
         checkedFilePaths.push(filePath);
-        return false;
+        return undefined;
       },
     });
   }).toThrow();
@@ -111,9 +111,9 @@ test("fallthrough | ts | import  | yes ext", async () => {
       type: "import",
       absImportPath: "/package/z.js",
       rawImportPath: "./z.js",
-      checkFile: (filePath) => {
+      getResolvedFile: (filePath) => {
         checkedFilePaths.push(filePath);
-        return false;
+        return undefined;
       },
     });
   }).toThrow();
@@ -146,9 +146,9 @@ test("fallthrough | js | require | no ext", async () => {
       type: "require",
       absImportPath: "/package/z",
       rawImportPath: "./z",
-      checkFile: (filePath) => {
+      getResolvedFile: (filePath) => {
         checkedFilePaths.push(filePath);
-        return false;
+        return undefined;
       },
     });
   }).toThrow();
@@ -181,9 +181,9 @@ test("fallthrough | js | require | yes ext", async () => {
       type: "require",
       absImportPath: "/package/z.js",
       rawImportPath: "./z.js",
-      checkFile: (filePath) => {
+      getResolvedFile: (filePath) => {
         checkedFilePaths.push(filePath);
-        return false;
+        return undefined;
       },
     });
   }).toThrow();
@@ -216,9 +216,9 @@ test("fallthrough | js | import  | no ext", async () => {
       importedFrom: "/package/a.js",
       absImportPath: "/package/z",
       rawImportPath: "./z",
-      checkFile: (filePath) => {
+      getResolvedFile: (filePath) => {
         checkedFilePaths.push(filePath);
-        return false;
+        return undefined;
       },
     });
   }).toThrow();
@@ -251,9 +251,9 @@ test("fallthrough | js | import  | yes ext", async () => {
       importedFrom: "/package/a.js",
       absImportPath: "/package/z.js",
       rawImportPath: "./z.js",
-      checkFile: (filePath) => {
+      getResolvedFile: (filePath) => {
         checkedFilePaths.push(filePath);
-        return false;
+        return undefined;
       },
     });
   }).toThrow();
