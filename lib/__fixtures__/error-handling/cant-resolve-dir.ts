@@ -1,1 +1,1 @@
-import "./not-a-real-file/";
+import "./not-a-real-dir/";

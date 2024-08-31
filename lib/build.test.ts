@@ -68,13 +68,20 @@ test("tsconfig support", async () => {
     `z.ts z.z.ts z/index.ts z.z/index.ts z/index.ts z.z/index.ts`.split(" ").join("\n")
   );
 });
-test("error handling", async () => {
-  await expect(
-    runNodeScript(`lib/__fixtures__/error-handling/cant-resolve.ts`)
-  ).rejects.toThrowError(
-    `Could not find import:\n  ./not-a-real-file\nfrom:\n  ${process.cwd()}/lib/__fixtures__/error-handling/cant-resolve.ts`
-  );
-
+test("error handling stderr", async () => {
+  try {
+    await runNodeScript(`lib/__fixtures__/error-handling/cant-resolve.ts`);
+    expect("didThrow").toBe(true);
+  } catch (error) {
+    if (error instanceof Error) {
+      expect(error.message).toMatch(`Could not find import:\n  ./not-a-real-file`);
+      expect(error.message).toMatch(`from:\n  lib/__fixtures__/error-handling/cant-resolve.ts`);
+    } else {
+      expect("didThrowError").toBe(true);
+    }
+  }
+});
+test("error handling syntax error", async () => {
   const syntaxErrorRegex = new RegExp(
     `^${`Error transforming ${process.cwd()}/lib/__fixtures__/error-handling/syntax-error:`.replaceAll(
       /[$()*+.?[\\\]^{|}]/g,

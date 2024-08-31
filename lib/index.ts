@@ -44,6 +44,13 @@ export type FileResult = {
   dependencyMap: Map<string, string>;
 };
 
+export class XnrError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "XnrError";
+  }
+}
+
 /**
  * Convert an input code string to a node-friendly esm code string
  */
@@ -87,7 +94,7 @@ export const build = async ({
 }): Promise<BuildResult> => {
   /* istanbul ignore next */
   if (process.platform === "win32") {
-    throw new Error("xnr does not currently support windows");
+    throw new XnrError("xnr does not currently support windows");
   }
 
   outputDirectory = path.resolve(outputDirectory);
@@ -296,7 +303,7 @@ export const run = async (filePathOrConfig: string | RunConfig): Promise<number>
 
   /* istanbul ignore next */
   if (process.platform === "win32") {
-    throw new Error("xnr does not currently support windows");
+    throw new XnrError("xnr does not currently support windows");
   }
 
   let outputDirectory: string;
@@ -399,7 +406,7 @@ export const run = async (filePathOrConfig: string | RunConfig): Promise<number>
           writeStdout(stripAnsi(data.toString()));
         });
         child.stderr.on("data", (data: Buffer) => {
-          writeStderr(transformErrors(stripAnsi(data.toString())));
+          writeStderr(transformErrors(stripAnsi(data.toString())) + "\n");
         });
 
         child.on("exit", async (code) => {
@@ -409,7 +416,22 @@ export const run = async (filePathOrConfig: string | RunConfig): Promise<number>
           cleanupSync();
           resolve(code ?? 0);
         });
-      } catch {
+      } catch (error) {
+        if (error instanceof XnrError) {
+          writeStderr(error.message);
+          writeStderr("\n");
+        } else {
+          /* istanbul ignore next */
+          if (error instanceof Error) {
+            /* istanbul ignore next */ {
+              writeStderr(
+                "Unexpected error when running xnr\nIf you are on the latest version, please report this issue on GitHub\n"
+              );
+              writeStderr(error.stack ?? error.message);
+              writeStderr("\n");
+            }
+          }
+        }
         cleanupSync();
         resolve(1);
       }
@@ -536,7 +558,7 @@ const transformAST = async ({
 
         if (internalSourceFile === undefined) {
           /* istanbul ignore next */
-          throw new Error(
+          throw new XnrError(
             `Could not find a valid import value\nCould not resolve ${joinedPath}[/index.*] from ${relativeInputFile}`
           );
         }
@@ -610,7 +632,7 @@ const transformAST = async ({
                   paths: [inputFile],
                 });
               } catch {
-                throw new Error(
+                throw new XnrError(
                   `Could not import/require ${JSON.stringify(value)} from ${JSON.stringify(
                     inputFile
                   )}`
@@ -1021,6 +1043,10 @@ export const resolveLocalImport = ({
   }
 };
 
+const toNiceFilePath = (filePath: string) => {
+  return filePath.startsWith(process.cwd()) ? path.relative(process.cwd(), filePath) : filePath;
+};
+
 const isNodeStringLiteral = (
   node: AnyNode | null | undefined
 ): node is Literal & { value: string; raw: string } => {
@@ -1052,7 +1078,11 @@ const resolveLocalImportUnknownExt = ({
     if (file) return file;
   }
 
-  throw new Error(`Could not find import:\n  ${rawImportPath}\nfrom:\n  ${importedFrom}`);
+  throw new XnrError(
+    `Could not find import:\n  ${rawImportPath}${
+      importedFrom ? `\nfrom:\n  ${toNiceFilePath(importedFrom)}` : ""
+    }`
+  );
 };
 
 const resolveLocalImportKnownExt = ({
@@ -1083,7 +1113,11 @@ const resolveLocalImportKnownExt = ({
     if (file) return file;
   }
 
-  throw new Error(`Could not find import:\n  ${rawImportPath}\nfrom:\n  ${importedFrom}`);
+  throw new XnrError(
+    `Could not find import:\n  ${rawImportPath}${
+      importedFrom ? `\nfrom:\n  ${toNiceFilePath(importedFrom)}` : ""
+    }`
+  );
 };
 
 const runStrategy = ({
