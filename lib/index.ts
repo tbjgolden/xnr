@@ -27,7 +27,7 @@ const parseModule = (a: string, b?: Options) => {
 type AST = ReturnType<typeof parseModule>;
 type BasePathResolver = (specifier: string) => string[];
 
-export type FileResult = {
+type FileResult = {
   inputFile: string;
   outputFormat: ".cjs" | ".mjs";
   outputFilePath: string;
@@ -42,7 +42,12 @@ export class XnrError extends Error {
 }
 
 /**
- * Convert an input code string to a node-friendly esm code string
+ * Transforms an input code string into a Node-friendly ECMAScript Module (ESM) code string.
+ *
+ * @param {Object} options - The options for transforming the code.
+ * @param {string} options.code - The input code as a string.
+ * @param {string} [options.filePath] - The path of the file being transformed.
+ * @returns {Promise<string>} A promise that resolves with the transformed code.
  */
 export const transform = async ({
   code: inputCode,
@@ -67,6 +72,13 @@ export const transform = async ({
   return code;
 };
 
+/**
+ * Represents the result of the build process, including the entry point and processed files.
+ *
+ * @typedef {Object} BuildResult
+ * @property {string} entrypoint - The entry point file for the build.
+ * @property {FileResult[]} files - An array of file results from the build process.
+ */
 export type BuildResult = {
   entrypoint: string;
   files: FileResult[];
@@ -81,7 +93,12 @@ type FileToProcess = {
 };
 
 /**
- * Convert source code from an entry file into a directory of node-friendly esm code
+ * Converts the source code from an entry file into a directory of Node-friendly ESM code.
+ *
+ * @param {Object} options - The options for building the code.
+ * @param {string} options.filePath - The path of the entry file.
+ * @param {string} options.outputDirectory - The directory where the output files will be saved.
+ * @returns {Promise<BuildResult>} A promise that resolves with the build result, containing the entry point and file details.
  */
 export const build = async ({
   filePath,
@@ -318,9 +335,16 @@ export type RunConfig = {
 };
 
 /**
- * Runs a file, no questions asked (auto-transpiling it and its dependencies as required)
+ * Runs a file with auto-transpilation of it and its dependencies, as required.
  *
- * @returns {Promise<number>} A promise with the exit code of the process
+ * @param {string|RunConfig} filePathOrConfig - The path of the file to run or a configuration object.
+ * @param {string} [filePathOrConfig.filePath] - The path of the file to run.
+ * @param {string[]} [filePathOrConfig.args] - Arguments to pass to the script.
+ * @param {string[]} [filePathOrConfig.nodeArgs] - Node.js arguments to pass when running the script.
+ * @param {string} [filePathOrConfig.outputDirectory] - Directory for storing output files.
+ * @param {Function} [filePathOrConfig.writeStdout] - Function to handle standard output.
+ * @param {Function} [filePathOrConfig.writeStderr] - Function to handle standard error output.
+ * @returns {Promise<number>} A promise that resolves with the exit code of the process.
  */
 export const run = async (filePathOrConfig: string | RunConfig): Promise<number> => {
   const {
