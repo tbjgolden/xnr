@@ -75,7 +75,7 @@ const packageJson = await getPackageJson();
       } else if (cliName === "xnrb") {
         const command = `${cliFilePath} ./.scripts/build-tests build-tests`;
         const stdout = execSync(`node ${command}`).toString();
-        const expected = "build-tests/build-tests/index.mjs\n";
+        const expected = "build-tests/index.mjs\n";
         if (stdout !== expected) {
           console.log(`unexpected response when running: ${command}\n`);
           console.log("expected:");
