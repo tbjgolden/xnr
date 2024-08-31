@@ -31,10 +31,11 @@ npx xnr any-file.{ts,tsx,cts,mts,js,jsx,cjs,mjs}
 
 | runner    | npx single-ts-file | (preinstalled) | install size |
 | --------- | -----------------: | -------------: | -----------: |
-| xnr@1.1.4 |         `0.814`sec |     `0.294`sec |      `6.7`MB |
-| esr       |         `1.819`sec |     `0.347`sec |     `29.9`MB |
-| swc-node  |         `5.387`sec |     `0.164`sec |     `62.0`MB |
-| ts-node\* |         `0.945`sec |     `0.760`sec |      `6.7`MB |
+| xnr@2.0.0 |           `0.7`sec |       `0.3`sec |      `6.7`MB |
+| xnr@1.1.4 |           `0.8`sec |       `0.3`sec |      `6.7`MB |
+| ts-node\* |           `0.9`sec |       `0.8`sec |      `6.7`MB |
+| esr       |           `1.8`sec |       `0.4`sec |     `29.9`MB |
+| swc-node  |           `5.4`sec |       `0.2`sec |     `62.0`MB |
 
 \* does a type check. ~200ms faster with --transpile-only
 
