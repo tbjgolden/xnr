@@ -120,7 +120,7 @@ export const run = async (
 
 | runner    | npx single-ts-file | (preinstalled) | install size |
 | --------- | -----------------: | -------------: | -----------: |
-| xnr@2.0.0 |           `0.7`sec |       `0.3`sec |      `6.7`MB |
+| xnr@2.0.0 |           `0.7`sec |       `0.3`sec |      `0.4`MB |
 | xnr@1.1.4 |           `0.8`sec |       `0.3`sec |      `6.7`MB |
 | ts-node   |           `0.9`sec |       `0.8`sec |      `6.7`MB |
 | esr       |           `1.8`sec |       `0.4`sec |     `29.9`MB |
