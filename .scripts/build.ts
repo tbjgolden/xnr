@@ -8,9 +8,11 @@ import terser from "@rollup/plugin-terser";
 
 checkDirectory();
 
+// Reset dist directory
 await rm("dist", { recursive: true, force: true });
 await mkdir("dist", { recursive: true });
 
+// Run tsc
 type TSConfig = {
   compilerOptions: { [args: string]: unknown };
   exclude?: string[];
@@ -45,31 +47,30 @@ await new Promise<void>((resolve, reject) => {
 });
 await rm("tsconfig.tmp.json");
 
-// ---
-
+// Use Rollup to bundle the code
 let bundle: RollupBuild | undefined;
 let buildFailed = false;
 try {
-  // create a bundle
   bundle = await rollup({
-    input: "dist/cli/run.js",
+    input: "dist/lib/index.js",
     external: [/^node:/],
     plugins: [nodeResolve(), commonjs(), terser({})],
     onwarn: () => {
       // ignore
     },
   });
-
   const { output } = await bundle.generate({ format: "es" });
-  await writeFile("dist/xnr", output[0].code);
-  await chmod("dist/xnr", 0o755);
+  await writeFile("dist/lib/index.js", output[0].code);
 } catch (error) {
   buildFailed = true;
-  // do some error reporting
   console.error(error);
 }
 if (bundle) {
-  // closes the bundle
   await bundle.close();
 }
-process.exit(buildFailed ? 1 : 0);
+if (buildFailed) {
+  process.exit(1);
+}
+
+// Make the cli executable
+await chmod("dist/cli.js", 0o755);

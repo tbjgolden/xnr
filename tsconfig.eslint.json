@@ -17,6 +17,6 @@
     "outDir": "dist",
     "allowImportingTsExtensions": true
   },
-  "include": ["typings.d.ts", "lib/**/*", "jest.ts", "cli.ts"],
+  "include": ["typings.d.ts", "lib/**/*", ".scripts/**/*", "jest.ts", "cli.ts"],
   "exclude": ["lib/**/__fixtures__/**/*"]
 }

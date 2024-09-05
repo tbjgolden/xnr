@@ -2,7 +2,8 @@ import { lstat, readFile } from "node:fs/promises";
 
 export const isDirectory = async (path: string): Promise<boolean> => {
   try {
-    return (await lstat(path)).isDirectory();
+    const stat = await lstat(path);
+    return stat.isDirectory();
   } catch {
     return false;
   }
@@ -10,7 +11,8 @@ export const isDirectory = async (path: string): Promise<boolean> => {
 
 export const isFile = async (path: string): Promise<boolean> => {
   try {
-    return (await lstat(path)).isFile();
+    const stat = await lstat(path);
+    return stat.isFile();
   } catch {
     return false;
   }
@@ -36,7 +38,7 @@ export type PackageJson = Partial<{
   license: string;
   main: string;
   module: string;
-  exports: string;
+  exports: string | Record<string, string | undefined>;
   types: string;
   browser: string;
   keywords: string[];
@@ -66,9 +68,9 @@ export type PackageJson = Partial<{
 const expecter = (checker: (value: unknown) => boolean): ((value: unknown) => void) => {
   return (value: unknown) => {
     if (value !== undefined) {
-      const result = checker(value);
-      if (!result) {
-        throw "";
+      const isCorrect = checker(value);
+      if (!isCorrect) {
+        throw new Error(`Unexpected type found`);
       }
     }
   };
@@ -76,14 +78,14 @@ const expecter = (checker: (value: unknown) => boolean): ((value: unknown) => vo
 
 const expectToBeAString = expecter((value) => typeof value === "string");
 const expectToBeAStringArray = expecter((value) => {
-  return Array.isArray(value) && value.every((element) => typeof element === "string");
+  return Array.isArray(value) && value.every((element: unknown) => typeof element === "string");
 });
 const expectToBeAStringMap = expecter((value) => {
   return (
     value !== null &&
     typeof value === "object" &&
     !Array.isArray(value) &&
-    Object.values(value).every((element) => typeof element === "string")
+    Object.values(value).every((element: unknown) => typeof element === "string")
   );
 });
 const expectToBeAStringMapMap = expecter((value) => {
@@ -92,11 +94,11 @@ const expectToBeAStringMapMap = expecter((value) => {
     typeof value === "object" &&
     !Array.isArray(value) &&
     Object.values(value).every(
-      (element) =>
+      (element: unknown) =>
         element !== null &&
         typeof element === "object" &&
         !Array.isArray(element) &&
-        Object.values(element).every((element) => typeof element === "string")
+        Object.values(element).every((element: unknown) => typeof element === "string")
     )
   );
 });
@@ -106,7 +108,7 @@ const expectToBeStringOrStringMap = expecter((value) => {
     (value !== null &&
       typeof value === "object" &&
       !Array.isArray(value) &&
-      Object.values(value).every((element) => typeof element === "string"))
+      Object.values(value).every((element: unknown) => typeof element === "string"))
   );
 });
 
@@ -123,7 +125,6 @@ export const getPackageJson = async (): Promise<PackageJson> => {
       "license",
       "main",
       "module",
-      "exports",
       "types",
       "browser",
     ]) {
@@ -150,7 +151,7 @@ export const getPackageJson = async (): Promise<PackageJson> => {
     for (key of ["peerDependenciesMeta"]) {
       expectToBeAStringMapMap(obj[key]);
     }
-    for (key of ["author", "funding", "repository"]) {
+    for (key of ["author", "funding", "repository", "exports"]) {
       expectToBeStringOrStringMap(obj[key]);
     }
   } catch {
@@ -160,7 +161,7 @@ export const getPackageJson = async (): Promise<PackageJson> => {
 };
 
 export const readJSON = <T = unknown>(jsonString: string): T => {
-  return JSON.parse(removeJSONComments(jsonString));
+  return JSON.parse(removeJSONComments(jsonString)) as T;
 };
 
 export const writeJSON = <T extends JSONObject | JSONArray>(jsonString: T): string => {

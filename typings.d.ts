@@ -1,6 +1,6 @@
 // https://github.com/davidbonnet/astring/issues/687
 declare module "astring" {
-  import type { Node as EstreeNode } from "estree";
+  import type { AnyNode } from "acorn";
   import type { Mapping, SourceMapGenerator } from "source-map";
   import type { Writable } from "node:stream";
 
@@ -9,7 +9,7 @@ declare module "astring" {
    */
   export interface State {
     output: string;
-    write(code: string, node?: EstreeNode): void;
+    write(code: string, node?: AnyNode): void;
     writeComments: boolean;
     indent: string;
     lineEnd: string;
@@ -24,7 +24,7 @@ declare module "astring" {
    * Code generator for each node type.
    */
   export type Generator = {
-    [T in EstreeNode["type"]]: (node: EstreeNode & { type: T }, state: State) => void;
+    [T in AnyNode["type"]]: (node: AnyNode & { type: T }, state: State) => void;
   };
 
   /**
