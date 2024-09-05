@@ -49,33 +49,48 @@ npx xnr any-file.{ts,tsx,cts,mts,js,jsx,cjs,mjs}
 
 ## Getting Started
 
-### Running a Script
-
-Simply use `npx` to run your TypeScript or JavaScript file:
-
-```sh
-npx xnr your-file.ts
-```
-
 ### Installation
 
-While you can use `xnr` directly with `npx`, you might want to install it for frequent use:
+While you can use `xnr` directly with `npx`, you can also install it for frequent use:
 
 ```sh
 npm install --save-dev xnr
 ```
 
-### Building for Later Execution
+### Running a Script
 
-You can also build your script and dependencies for later use:
+Simply use `npx` to run your TypeScript or JavaScript file:
 
 ```sh
-# Requires xnr to be installed
-npx xnrb your-file.ts your-build-dir
-#~> your-build-dir/your-file.cjs
+npx xnr ./file.ts
+```
 
-# xnrb builds the project, and logs the entryfile
-node your-build-dir/your-file.cjs
+For running dev scripts in your package.json:
+
+```json
+{
+  "scripts": {
+    "run": "xnr run.ts"
+  }
+}
+```
+
+### Building for Later Execution
+
+You can also use this to pre-compile TS code for running on Node.
+
+```sh
+xnr build ./entry.ts ./dist/
+```
+
+For running build scripts in your package.json:
+
+```json
+{
+  "scripts": {
+    "build": "xnr build entry.ts dist"
+  }
+}
 ```
 
 ## Caveats and Scope
@@ -91,30 +106,34 @@ node your-build-dir/your-file.cjs
 ## Performance and Limitations
 
 - **No Type Checking**: Skips TypeScript type checking to speed up execution. If type checking is
-  needed, consider using `ts-node` or running TypeScript directly.
+  needed, consider running TypeScript directly.
+
+## CLI
+
+CLI docs can be viewed at any time by running `xnr --help`.
 
 ## API
 
-`xnr` also provides an API for more advanced usage:
+`xnr` also provides an API with the same options as the CLI.
 
 ```ts
-// Convert an input code string to a Node-friendly ESM code string
-export const transform = ({
-  code: string,
-  filePath?: string,
-}) => Promise<string>;
-
-// Convert source code from an entry file into a directory of Node-friendly ESM code
-export const build = ({
-  filePath: string,
-  outputDirectory: string,
-}) => Promise<BuildResult>;
-
 // Runs a file, auto-transpiling it and its dependencies as required
 export const run = async (
-  filePathOrConfig: string | RunConfig
-) => Promise<number>;
+  filePathOrConfig: string | { filePath: string; args?: string[]; nodeArgs?: string[]; /* ... */  }
+) => Promise<number>; // Exit Code
+
+// Convert source code from an entry file into a directory of Node-friendly ESM code
+export const build = ({ filePath: string, outputDirectory: string })
+  => Promise<{ entrypoint: string; /* ... */ }>;
+
+// Convert an input code string to a Node-friendly ESM code string
+export const transform = ({ code: string, filePath?: string })
+  => Promise<string>;
 ```
+
+A complete list of exports can be viewed on
+[`npmjs.com`](https://www.npmjs.com/package/xnr?activeTab=code) (navigate to
+/xnr/dist/lib/index.d.ts)
 
 ## Key benchmarks
 
