@@ -108,11 +108,6 @@ export const build = async ({
   filePath: string;
   outputDirectory: string;
 }): Promise<BuildResult> => {
-  /* istanbul ignore next */
-  if (process.platform === "win32") {
-    throw new XnrError("xnr does not currently support windows");
-  }
-
   outputDirectory = path.resolve(outputDirectory);
 
   const astCache = new Map<string, AST>();
@@ -357,11 +352,6 @@ export const run = async (filePathOrConfig: string | RunConfig): Promise<number>
     writeStdout = process.stdout.write.bind(process.stdout),
     writeStderr = process.stderr.write.bind(process.stderr),
   } = typeof filePathOrConfig === "string" ? { filePath: filePathOrConfig } : filePathOrConfig;
-
-  /* istanbul ignore next */
-  if (process.platform === "win32") {
-    throw new XnrError("xnr does not currently support windows");
-  }
 
   let outputDirectory: string;
   {
