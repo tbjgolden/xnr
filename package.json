@@ -39,7 +39,7 @@
   "scripts": {
     "build": "xnr ./.scripts/build.ts",
     "check-build": "xnr ./.scripts/checkBuild.ts",
-    "test": "NODE_OPTIONS='--experimental-vm-modules --no-warnings' npx jest",
+    "test": "cross-env NODE_OPTIONS='--experimental-vm-modules --no-warnings' npx jest",
     "prepare": "simple-git-hooks"
   },
   "devDependencies": {
@@ -54,6 +54,7 @@
     "acorn": "^8.12.1",
     "acorn-walk": "^8.3.3",
     "astring": "^1.8.6",
+    "cross-env": "^7.0.3",
     "dotenv": "^16.4.5",
     "eslint": "^9.9.1",
     "eslint-config-prettier": "^9.1.0",
