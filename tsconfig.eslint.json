@@ -1,22 +1,5 @@
 {
-  "compilerOptions": {
-    "target": "ES2022",
-    "lib": ["ES2022"],
-    "module": "NodeNext",
-    "moduleResolution": "node16",
-    "resolveJsonModule": true,
-    "declaration": true,
-    "declarationMap": false,
-    "sourceMap": false,
-    "isolatedModules": true,
-    "esModuleInterop": true,
-    "checkJs": true,
-    "strict": true,
-    "skipLibCheck": true,
-    "noEmit": true,
-    "outDir": "dist",
-    "allowImportingTsExtensions": true
-  },
+  "extends": "./tsconfig.json",
   "include": ["typings.d.ts", "lib/**/*", ".scripts/**/*", "jest.ts", "cli.ts"],
   "exclude": ["lib/**/__fixtures__/**/*"]
 }

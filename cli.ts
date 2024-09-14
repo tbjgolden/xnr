@@ -1,8 +1,9 @@
 #!/usr/bin/env node
-import { build, run } from "./lib/index.js";
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import fs from "node:fs";
+
+import { build, run } from "./lib/index.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -27,7 +28,7 @@ function parseArgs(): ParsedArgs {
   let args = process.argv.slice(2);
 
   // --nodeargs
-  let nodeArgsFlagIndex = args.indexOf("--nodeargs");
+  const nodeArgsFlagIndex = args.indexOf("--nodeargs");
   if (nodeArgsFlagIndex !== -1) {
     let hyphenHyphenIndex = args.indexOf("--", nodeArgsFlagIndex);
     if (hyphenHyphenIndex === -1) hyphenHyphenIndex = args.length;
@@ -37,22 +38,19 @@ function parseArgs(): ParsedArgs {
         `Error: Expected --nodeargs args to start with '-', found '${result.nodeArgs[0]}'.`
       );
       console.error("Run 'xnr --help' for usage information.");
-      process.exit;
+      process.exit(1);
     }
     args = [...args.slice(0, nodeArgsFlagIndex), ...args.slice(hyphenHyphenIndex + 1)];
   }
 
   // --outdir
-  let outputDirectoryFlagIndex = args.indexOf("--outdir");
+  const outputDirectoryFlagIndex = args.indexOf("--outdir");
   if (outputDirectoryFlagIndex !== -1) {
     result.outputDirectory = args[outputDirectoryFlagIndex + 1];
     args = [
       ...args.slice(0, outputDirectoryFlagIndex),
       ...args.slice(outputDirectoryFlagIndex + 2),
     ];
-  }
-
-  if (args.length === 1) {
   }
 
   const commandOrFilePath = args.shift();
@@ -142,7 +140,9 @@ async function main() {
       if (fs.existsSync(path.join(dirname, "package.json"))) break;
       dirname = path.dirname(dirname);
     }
-    const pkgJson = JSON.parse(fs.readFileSync(path.join(dirname, "package.json"), "utf8"));
+    const pkgJson = JSON.parse(fs.readFileSync(path.join(dirname, "package.json"), "utf8")) as {
+      version: string;
+    };
     console.log(`xnr v${pkgJson.version}`);
     process.exit(0);
   }
@@ -179,4 +179,4 @@ async function main() {
   }
 }
 
-main();
+await main();

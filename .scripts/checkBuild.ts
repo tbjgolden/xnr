@@ -1,8 +1,10 @@
+#!/usr/bin/env node
 import { execSync, spawn } from "node:child_process";
 import { rmSync } from "node:fs";
-import { getPackageJson, checkDirectory, isFile } from "./lib/utils";
 
-checkDirectory();
+import { checkDirectory, getPackageJson, isFile } from "./lib/utils";
+
+await checkDirectory();
 
 const packageJson = await getPackageJson();
 
@@ -15,10 +17,12 @@ const packageJson = await getPackageJson();
   }
   const [_, cliFilePath] = binEntries[0];
   if (cliFilePath) {
-    let isCliPathAFile = false;
+    let isCliPathAFile: boolean;
     try {
       isCliPathAFile = await isFile(cliFilePath);
-    } catch {}
+    } catch {
+      isCliPathAFile = false;
+    }
     if (!isCliPathAFile) {
       console.log(`"xnr": "${cliFilePath}" is not an executable file`);
       process.exit(1);
@@ -43,10 +47,10 @@ const packageJson = await getPackageJson();
         }>((resolve) => {
           const messages: { type: "stdout" | "stderr"; data: string }[] = [];
           const child = spawn("node", [cliFilePath, ".scripts/build-tests/crash-test.ts"]);
-          child.stdout.on("data", (data) => {
+          child.stdout.on("data", (data: string | Buffer) => {
             messages.push({ type: "stdout", data: data.toString() });
           });
-          child.stderr.on("data", (data) => {
+          child.stderr.on("data", (data: string | Buffer) => {
             messages.push({ type: "stderr", data: data.toString() });
           });
           child.on("exit", (code) => {
@@ -144,7 +148,9 @@ const packageJson = await getPackageJson();
       console.log(`entrypoint file "${libEntry}" doesn't exist`);
       process.exit(1);
     }
-    const { transform } = await import(process.cwd() + "/" + libEntry);
+    const { transform } = (await import(process.cwd() + "/" + libEntry)) as {
+      transform: (args: { code: string }) => Promise<string>;
+    };
     const result = await transform({
       code: `const typedFn = (str: string) => console.log(str);\ntypedFn("hello world");`,
     });
@@ -168,7 +174,9 @@ const packageJson = await getPackageJson();
       console.log(`entrypoint file "${jestEntry}" doesn't exist`);
       process.exit(1);
     }
-    const { default: transformer } = await import(process.cwd() + "/" + jestEntry);
+    const { default: transformer } = (await import(process.cwd() + "/" + jestEntry)) as {
+      default: { processAsync: (code: string, filename: string) => Promise<{ code: string }> };
+    };
     const processResult = await transformer.processAsync(
       `const typedFn = (str: string) => console.log(str);\ntypedFn("hello world");`,
       "a.ts"

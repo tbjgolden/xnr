@@ -1,4 +1,5 @@
 import type { Transformer } from "@jest/transform";
+
 import { transform } from "./lib/index.js";
 
 const transformer: Transformer = {

@@ -1,8 +1,9 @@
 // https://github.com/davidbonnet/astring/issues/687
 declare module "astring" {
+  import type { Writable } from "node:stream";
+
   import type { AnyNode } from "acorn";
   import type { Mapping, SourceMapGenerator } from "source-map";
-  import type { Writable } from "node:stream";
 
   /**
    * State object passed to generator functions.

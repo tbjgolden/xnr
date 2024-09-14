@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+
 import { run } from "./index.ts";
 
 test("run a file directly (success)", async () => {
@@ -170,4 +171,4 @@ test("run allows stdin passthrough", async () => {
   });
 
   expect(stdout).toMatch("Thank you for your valuable feedback: yee");
-});
+}, 1500);

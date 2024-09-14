@@ -21,7 +21,7 @@ const eslintConfigPrettier = require("eslint-config-prettier");
 /** @type { import("eslint").Linter.Config[] } */
 const config = [
   {
-    ignores: getIgnoresFromGitignore(),
+    ignores: [...getIgnoresFromGitignore(), "lib/__fixtures__", ".scripts/build-tests"],
   },
   {
     files: ["**/*.{js,mjs,cjs,jsx,ts,tsx,mts}"],
@@ -104,6 +104,7 @@ const config = [
       "unicorn/no-useless-fallback-in-spread": "warn",
       "unicorn/no-useless-spread": "warn",
       "unicorn/no-useless-undefined": "off",
+      "unicorn/no-await-expression-member": "off",
       "unicorn/prefer-switch": ["error", { minimumCases: 5 }],
       "unicorn/prefer-top-level-await": "off",
       "unicorn/prevent-abbreviations": [
@@ -221,25 +222,4 @@ function getIgnoresFromGitignore() {
         return converted;
       }
     });
-}
-
-/**
- * @param { import("eslint").Linter.RuleEntry } entry
- * @param { 0 | 1 | 2 | 'off' | 'warn' | 'error' } from
- * @param { 0 | 1 | 2 | 'off' | 'warn' | 'error' } to
- * @returns { import("eslint").Linter.RuleEntry }
- * */
-function changeSeverity(entry, from, to) {
-  let fromAlt;
-  if (typeof fromAlt === "number") {
-    fromAlt = from === 0 ? "off" : from === 1 ? "warn" : "error";
-  } else {
-    fromAlt = from === "off" ? 0 : from === "warn" ? 1 : 2;
-  }
-
-  if (Array.isArray(entry)) {
-    return [entry[0] === from || entry[0] === fromAlt ? to : entry[0], ...entry.slice(1)];
-  } else {
-    return entry === from || entry === fromAlt ? to : entry;
-  }
 }

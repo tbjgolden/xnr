@@ -1,13 +1,11 @@
-import fs from "node:fs";
-import path from "node:path/posix";
 import { spawn } from "node:child_process";
-import { builtinModules } from "node:module";
 import { randomUUID } from "node:crypto";
+import fs from "node:fs";
+import { builtinModules } from "node:module";
+import path from "node:path/posix";
+import process from "node:process";
 import { fileURLToPath } from "node:url";
-import { generate } from "astring";
-import { transform as sucraseTransform } from "sucrase";
-import { getTsconfig, createPathsMatcher, TsConfigResult } from "get-tsconfig";
-import { resolve as importResolve } from "import-meta-resolve";
+
 import {
   AnyNode,
   AssignmentProperty,
@@ -17,8 +15,11 @@ import {
   parse,
   VariableDeclaration,
 } from "acorn";
-import { simple, ancestor, findNodeAt } from "acorn-walk";
-import process from "node:process";
+import { ancestor, findNodeAt, simple } from "acorn-walk";
+import { generate } from "astring";
+import { createPathsMatcher, getTsconfig, TsConfigResult } from "get-tsconfig";
+import { resolve as importResolve } from "import-meta-resolve";
+import { transform as sucraseTransform } from "sucrase";
 
 const parseModule = (a: string, b?: Options) => {
   return parse(a, { ...b, sourceType: "module", ecmaVersion: "latest" });
@@ -139,7 +140,9 @@ export const build = async ({
           }
         }
         fsCache.set(parentDirectory, filesSet);
-      } catch {}
+      } catch {
+        // Do not report an error here, as it will be reported later
+      }
     }
     return filesSet.get(name);
   };
@@ -159,9 +162,8 @@ export const build = async ({
 
   const fileStack: FileToProcess[] = [firstFile];
   const explored = new Set();
-  const internalSourceFiles: Array<Omit<FileResult, "outputFilePath">> = [];
+  const internalSourceFiles: Omit<FileResult, "outputFilePath">[] = [];
   while (fileStack.length > 0) {
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const { filePath, parentFilePath, entryMethod } = fileStack.pop()!;
 
     if (!explored.has(filePath)) {
@@ -308,7 +310,7 @@ export const build = async ({
   await Promise.all(
     files.map(async ({ inputFile, outputFilePath, dependencyMap }) => {
       const newFile = await transformAST({
-        ast: astCache.get(inputFile) as AST,
+        ast: astCache.get(inputFile)!,
         outputDirectory,
         relativeInputFile: path.relative(commonRootPath, inputFile),
         internalSourceFilesMap,
@@ -387,12 +389,15 @@ export const run = async (filePathOrConfig: string | RunConfig): Promise<number>
   };
 
   return new Promise<number>((resolve) => {
-    (async () => {
+    void (async () => {
       try {
         const { entrypoint, files } = await build({ filePath, outputDirectory });
 
         const outputDirectoryErrorLocationRegex = new RegExp(
-          `(${outputDirectory.replaceAll(/[$()*+.?[\\\]^{|}]/g, "\\$&")}/[^:\n]*)(?::\\d+){0,2}`,
+          `(${outputDirectory.replaceAll(
+            /[$()*+.?[\\\]^{|}]/g,
+            String.raw`\$&`
+          )}/[^:\n]*)(?::\\d+){0,2}`,
           "g"
         );
 
@@ -410,7 +415,7 @@ export const run = async (filePathOrConfig: string | RunConfig): Promise<number>
               const file = match[1];
               const inputFile = outputToInputFileLookup.get(file);
               if (inputFile) {
-                const nextPartStartIndex = (match.index as number) + match[0].length;
+                const nextPartStartIndex = match.index + match[0].length;
                 str = `${str.slice(0, match.index ?? 0)}${inputFile}${randomBytes}${str.slice(
                   nextPartStartIndex
                 )}`;
@@ -464,7 +469,7 @@ export const run = async (filePathOrConfig: string | RunConfig): Promise<number>
           writeStderr(transformErrors(stripAnsi(data.toString())) + "\n");
         });
 
-        child.on("exit", async (code) => {
+        child.on("exit", (code: number | null) => {
           process.off("SIGINT", cleanupSync); // CTRL+C
           process.off("SIGQUIT", cleanupSync); // Keyboard quit
           process.off("SIGTERM", cleanupSync); // `kill` command
@@ -497,10 +502,10 @@ export const run = async (filePathOrConfig: string | RunConfig): Promise<number>
 // ----------------------------------------------------------------
 
 const readImports = async (ast: AST) => {
-  const imports: Array<{
+  const imports: {
     method: "import" | "require";
     importPath: string;
-  }> = [];
+  }[] = [];
 
   const pushSourceAsDep = (node: { source?: Expression | Literal | null | undefined }) => {
     if (isNodeStringLiteral(node.source)) {
@@ -595,7 +600,7 @@ const transformAST = async ({
     return dependencyPath;
   };
 
-  const promises: Array<Promise<void>> = [];
+  const promises: Promise<void>[] = [];
 
   const rewriteSourceString = (toRewrite: AnyNode | null | undefined) => {
     const value = getStringNodeValue(toRewrite);
@@ -1045,7 +1050,7 @@ const resolveLocalImportUnknownExt = ({
   rawImportPath,
 }: {
   absImportPath: string;
-  order: ReadonlyArray<Strategy>;
+  order: readonly Strategy[];
   getResolvedFile: (filePath: string) => string | undefined;
   resolveAsDirectory: () => string | undefined;
   importedFrom: string;
@@ -1075,7 +1080,7 @@ const resolveLocalImportKnownExt = ({
   rawImportPath,
 }: {
   absImportPath: string;
-  order: ReadonlyArray<Strategy>;
+  order: readonly Strategy[];
   getResolvedFile: (filePath: string) => string | undefined;
   resolveAsDirectory: () => string | undefined;
   importedFrom: string;
@@ -1135,7 +1140,7 @@ const runStrategy = ({
 };
 
 const getKnownExt = (filePath: string): KnownExtension | undefined => {
-  const match = path.extname(filePath).match(KNOWN_EXT_REGEX);
+  const match = KNOWN_EXT_REGEX.exec(path.extname(filePath));
   return match ? (match[0].slice(1).toLowerCase() as KnownExtension) : undefined;
 };
 

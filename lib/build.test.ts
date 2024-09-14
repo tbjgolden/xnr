@@ -1,10 +1,10 @@
-import { build, run } from "./index.ts";
-
 import { fork } from "node:child_process";
-import path from "node:path/posix";
 import fs from "node:fs/promises";
-import process from "node:process";
 import { tmpdir } from "node:os";
+import path from "node:path/posix";
+import process from "node:process";
+
+import { build, run } from "./index.ts";
 
 test("transpile one file of each extension", async () => {
   await testBatch("single", JSON.stringify({ hello: "world" }));
@@ -85,7 +85,7 @@ test("error handling syntax error", async () => {
   const syntaxErrorRegex = new RegExp(
     `^${`Error transforming ${process.cwd()}/lib/__fixtures__/error-handling/syntax-error:`.replaceAll(
       /[$()*+.?[\\\]^{|}]/g,
-      "\\$&"
+      String.raw`\$&`
     )}`
   );
 
@@ -168,9 +168,10 @@ const runNodeScript = async (entryFilePath: string): Promise<string> => {
     child.stderr?.on("data", (data) => {
       stdout += data;
     });
-    child.on("exit", async () => {
-      await fs.rm(outputDirectory, { recursive: true, force: true });
-      resolve(stdout.trim());
+    child.on("exit", () => {
+      void fs.rm(outputDirectory, { recursive: true, force: true }).then(() => {
+        resolve(stdout.trim());
+      });
     });
   });
 };
