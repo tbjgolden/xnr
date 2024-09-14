@@ -39,7 +39,7 @@
   "scripts": {
     "build": "xnr ./.scripts/build.ts",
     "check-build": "xnr ./.scripts/checkBuild.ts",
-    "test": "cross-env NODE_OPTIONS='--experimental-vm-modules --no-warnings' npx jest",
+    "test": "cross-env NODE_OPTIONS=\"--experimental-vm-modules --no-warnings\" npx jest",
     "prepare": "simple-git-hooks"
   },
   "devDependencies": {
