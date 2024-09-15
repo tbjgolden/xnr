@@ -1,8 +1,7 @@
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
-import { builtinModules } from "node:module";
-import path from "node:path/posix";
+import posix from "node:path/posix";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
@@ -11,22 +10,38 @@ import {
   AssignmentProperty,
   Expression,
   Literal,
-  Options,
-  parse,
+  Program,
   VariableDeclaration,
 } from "acorn";
-import { ancestor, findNodeAt, simple } from "acorn-walk";
+import { ancestor, simple } from "acorn-walk";
 import { generate } from "astring";
-import { createPathsMatcher, getTsconfig, TsConfigResult } from "get-tsconfig";
 import { resolve as importResolve } from "import-meta-resolve";
 import { transform as sucraseTransform } from "sucrase";
 
-const parseModule = (a: string, b?: Options) => {
-  return parse(a, { ...b, sourceType: "module", ecmaVersion: "latest" });
-};
-
-type AST = ReturnType<typeof parseModule>;
-type BasePathResolver = (specifier: string) => string[];
+import {
+  asLiteral,
+  determineModuleTypeFromAST,
+  getStringNodeValue,
+  isCreateRequire,
+  isNodeStringLiteral,
+  isRequire,
+  isRequireMainRequire,
+  replaceNode,
+} from "./astHelpers";
+import {
+  BasePathResolver,
+  CouldNotFindImportError,
+  determineModuleTypeFromPath,
+  EXT_ORDER_MAP_COMMONJS,
+  EXT_ORDER_MAP_MODULE,
+  getContextualPathResolver,
+  getKnownExt,
+  isNodeBuiltin,
+  KnownExtension,
+  parseModule,
+  stripAnsi,
+  XnrError,
+} from "./helpers";
 
 type FileResult = {
   inputFile: string;
@@ -34,13 +49,6 @@ type FileResult = {
   outputFilePath: string;
   dependencyMap: Map<string, string>;
 };
-
-export class XnrError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "XnrError";
-  }
-}
 
 /**
  * Transforms an input code string into a Node-friendly ECMAScript Module (ESM) code string.
@@ -57,8 +65,9 @@ export const transform = async ({
   code: string;
   filePath?: string;
 }): Promise<string> => {
+  const ext = posix.extname(filePath ?? "").toLowerCase();
   let { code } = sucraseTransform(inputCode, {
-    transforms: ["typescript", ...((filePath ?? ".ts").endsWith(".ts") ? [] : ["jsx" as const])],
+    transforms: ["typescript", ...(ext.endsWith("ts") ? [] : ["jsx" as const])],
     jsxPragma: "React.createClass",
     jsxFragmentPragma: "React.Fragment",
     filePath,
@@ -87,7 +96,6 @@ export type BuildResult = {
 
 type FileToProcess = {
   filePath: string;
-  entryMethod: "entry" | "import" | "require";
   parentFilePath: string;
   /* This is used to improve error messages */
   rawImportPath: string;
@@ -108,14 +116,14 @@ export const build = async ({
   filePath: string;
   outputDirectory: string;
 }): Promise<BuildResult> => {
-  outputDirectory = path.resolve(outputDirectory);
+  outputDirectory = posix.resolve(outputDirectory);
 
-  const astCache = new Map<string, AST>();
+  const astCache = new Map<string, Program>();
   const fsCache = new Map<string, Map<string, string>>();
   const resolverCache = new Map<string, BasePathResolver>();
 
   const getResolvedFile = (filePath: string): string | undefined => {
-    const parentDirectory = path.join(filePath, "..");
+    const parentDirectory = posix.join(filePath, "..");
     const name = filePath.slice(parentDirectory.length + 1);
     let filesSet = fsCache.get(parentDirectory);
     if (!filesSet) {
@@ -123,13 +131,13 @@ export const build = async ({
       try {
         for (const dirent of fs.readdirSync(parentDirectory, { withFileTypes: true })) {
           if (dirent.isFile()) {
-            filesSet.set(dirent.name, path.resolve(parentDirectory, dirent.name));
+            filesSet.set(dirent.name, posix.resolve(parentDirectory, dirent.name));
           } else if (dirent.isSymbolicLink()) {
             filesSet.set(
               dirent.name,
-              path.resolve(
+              posix.resolve(
                 parentDirectory,
-                fs.readlinkSync(path.join(parentDirectory, dirent.name))
+                fs.readlinkSync(posix.join(parentDirectory, dirent.name))
               )
             );
           }
@@ -144,69 +152,48 @@ export const build = async ({
 
   const firstFile: FileToProcess = {
     filePath: resolveLocalImport({
-      absImportPath: path.resolve(filePath),
+      absImportPath: posix.resolve(filePath),
       importedFrom: "",
-      method: "entry",
+      method: "import",
       getResolvedFile,
       rawImportPath: filePath,
     }),
-    parentFilePath: path.extname(filePath),
+    parentFilePath: posix.extname(filePath),
     rawImportPath: filePath,
-    entryMethod: "entry",
   };
 
   const fileStack: FileToProcess[] = [firstFile];
   const explored = new Set();
   const internalSourceFiles: Omit<FileResult, "outputFilePath">[] = [];
   while (fileStack.length > 0) {
-    const { filePath, parentFilePath, entryMethod } = fileStack.pop()!;
+    const { filePath, parentFilePath } = fileStack.pop()!;
 
     if (!explored.has(filePath)) {
       explored.add(filePath);
 
       const actualFileString = await fs.promises.readFile(filePath, "utf8");
 
-      // special case if the file is json
-      if (path.extname(filePath).toLowerCase().startsWith(".json")) {
-        const outputFormat = entryMethod === "require" ? ".cjs" : ".mjs";
-        // use sucrase to turn it into output string, store for later
-        const code = await transform({
-          code:
-            (outputFormat === ".mjs" ? "export default " : "module.exports = ") + actualFileString,
-          filePath,
-        });
-        // parse into an ast. cache for later key by filepath
-        const ast: AST = parseModule(code);
+      if (posix.extname(filePath).toLowerCase().startsWith(".json")) {
+        // special case if the file is json
+        const ast: Program = parseModule("module.exports = " + actualFileString);
         astCache.set(filePath, ast);
         internalSourceFiles.push({
           inputFile: filePath,
-          outputFormat,
+          outputFormat: ".cjs",
           dependencyMap: new Map<string, string>(),
         });
       } else {
-        // use sucrase to turn it into output string, store for later
-        const code = await transform({
-          code: actualFileString,
-          filePath,
-        });
-        // parse into an ast. cache for later key by filepath
-        const ast: AST = parseModule(code);
+        const ast: Program = parseModule(await transform({ code: actualFileString, filePath }));
         astCache.set(filePath, ast);
-        // find config file if hasn't already found one for this dir
         const resolvePaths = getContextualPathResolver(filePath, resolverCache);
-        // read file for imports/exports/requires
         const rawImports = await readImports(ast);
-        const localResolvedImports: {
-          method: "import" | "require";
-          importPath: string;
-          resolved: string;
-        }[] = [];
+        const localResolvedImports: { importPath: string; resolved: string }[] = [];
         for (const rawImport of rawImports) {
           const paths = resolvePaths(rawImport.importPath);
           let firstError: XnrError | undefined;
           for (const path_ of paths) {
             if (path_.startsWith(".") || path_.startsWith("/")) {
-              const absImportPath = path.resolve(filePath, "..", path_);
+              const absImportPath = posix.resolve(filePath, "..", path_);
               try {
                 const resolved = resolveLocalImport({
                   absImportPath,
@@ -217,7 +204,6 @@ export const build = async ({
                 });
                 if (resolved) {
                   localResolvedImports.push({
-                    method: rawImport.method,
                     importPath: rawImport.importPath,
                     resolved,
                   });
@@ -243,12 +229,11 @@ export const build = async ({
             return [path, resolved];
           })
         );
-        for (const { importPath, resolved, method } of localResolvedImports) {
+        for (const { importPath, resolved } of localResolvedImports) {
           if (resolved.startsWith(".") || resolved.startsWith("/")) {
-            const nextFilePath = path.resolve(filePath, "..", resolved);
+            const nextFilePath = posix.resolve(filePath, "..", resolved);
             fileStack.push({
               filePath: nextFilePath,
-              entryMethod: method,
               parentFilePath,
               rawImportPath: importPath,
             });
@@ -267,7 +252,7 @@ export const build = async ({
   // Find common root directory of all source files
   let commonRootPath = internalSourceFiles[0].inputFile;
   while (commonRootPath !== "/") {
-    commonRootPath = path.join(commonRootPath, "..");
+    commonRootPath = posix.join(commonRootPath, "..");
     const ensureSlash = commonRootPath + "/";
     const areAllFilePathsDescendants = internalSourceFiles.every(({ inputFile }) => {
       return inputFile.startsWith(ensureSlash);
@@ -284,16 +269,16 @@ export const build = async ({
     internalSourceFiles.map(({ inputFile, outputFormat, dependencyMap }) => {
       let outputPath = outputDirectory + "/" + inputFile.slice(commonRootPath.length + 1);
       outputPath =
-        outputPath.slice(0, outputPath.length - path.extname(outputPath).length) + outputFormat;
-      const outputFilePath = path.resolve(outputDirectory, outputPath);
+        outputPath.slice(0, outputPath.length - posix.extname(outputPath).length) + outputFormat;
+      const outputFilePath = posix.resolve(outputDirectory, outputPath);
       if (outputEntryFilePath === "") {
         outputEntryFilePath = outputFilePath;
       }
 
       return [
-        path.relative(
+        posix.relative(
           outputDirectory,
-          outputFilePath.slice(0, outputFilePath.length - path.extname(outputFilePath).length)
+          outputFilePath.slice(0, outputFilePath.length - posix.extname(outputFilePath).length)
         ),
         { inputFile, outputFormat, outputFilePath, dependencyMap },
       ];
@@ -307,14 +292,14 @@ export const build = async ({
       const newFile = await transformAST({
         ast: astCache.get(inputFile)!,
         outputDirectory,
-        relativeInputFile: path.relative(commonRootPath, inputFile),
+        relativeInputFile: posix.relative(commonRootPath, inputFile),
         internalSourceFilesMap,
         dependencyMap,
         inputFile,
       });
 
       /* Enable require from esm */
-      await fs.promises.mkdir(path.join(outputFilePath, ".."), { recursive: true });
+      await fs.promises.mkdir(posix.join(outputFilePath, ".."), { recursive: true });
       await fs.promises.writeFile(outputFilePath, "#!/usr/bin/env node\n" + newFile);
     })
   );
@@ -356,21 +341,21 @@ export const run = async (filePathOrConfig: string | RunConfig): Promise<number>
   let outputDirectory: string;
   {
     if (outputDirectory_) {
-      outputDirectory = path.resolve(outputDirectory_);
+      outputDirectory = posix.resolve(outputDirectory_);
     } else {
-      let current = path.resolve(filePath);
+      let current = posix.resolve(filePath);
       let packageJsonPath: string | undefined;
       while (current !== "/") {
-        const packageJsonPath_ = path.join(current, "package.json");
+        const packageJsonPath_ = posix.join(current, "package.json");
         if (fs.existsSync(packageJsonPath_)) {
           packageJsonPath = packageJsonPath_;
           break;
         }
-        current = path.join(current, "..");
+        current = posix.join(current, "..");
       }
       outputDirectory = packageJsonPath
-        ? path.join(packageJsonPath, "../node_modules/.cache/xnr")
-        : path.join(process.cwd(), ".tmp/xnr");
+        ? posix.join(packageJsonPath, "../node_modules/.cache/xnr")
+        : posix.join(process.cwd(), ".tmp/xnr");
     }
   }
 
@@ -491,7 +476,7 @@ export const run = async (filePathOrConfig: string | RunConfig): Promise<number>
 
 // ----------------------------------------------------------------
 
-const readImports = async (ast: AST) => {
+const readImports = async (ast: Program) => {
   const imports: {
     method: "import" | "require";
     importPath: string;
@@ -533,7 +518,7 @@ const transformAST = async ({
   dependencyMap,
   inputFile,
 }: {
-  ast: AST;
+  ast: Program;
   outputDirectory: string;
   relativeInputFile: string;
   internalSourceFilesMap: Map<string, FileResult>;
@@ -546,7 +531,7 @@ const transformAST = async ({
     if (dependencyPath.startsWith(".") || dependencyPath.startsWith("/")) {
       // convert absolute to relative
       if (dependencyPath.startsWith("/")) {
-        let relativePath = path.relative(path.join(inputFile, ".."), dependencyPath);
+        let relativePath = posix.relative(posix.join(inputFile, ".."), dependencyPath);
         if (!relativePath.startsWith(".")) relativePath = "./" + relativePath;
         dependencyPath = relativePath + (dependencyPath.endsWith("/") ? "/" : "");
       }
@@ -558,12 +543,12 @@ const transformAST = async ({
           lastIndexOfSlash === -1 ? "" : relativeInputFile.slice(0, lastIndexOfSlash);
 
         // both joins path and removes trailing slash
-        const joinedPath = path.join(pathWithoutSlash, dependencyPath, ".");
+        const joinedPath = posix.join(pathWithoutSlash, dependencyPath, ".");
 
         internalSourceFile =
           internalSourceFilesMap.get(joinedPath + "/index") ??
           internalSourceFilesMap.get(joinedPath);
-        const ext = path.extname(joinedPath);
+        const ext = posix.extname(joinedPath);
         const withoutExt = ext.length === 0 ? joinedPath : joinedPath.slice(0, -ext.length);
         if (internalSourceFile === undefined) {
           internalSourceFile = internalSourceFilesMap.get(withoutExt);
@@ -577,8 +562,8 @@ const transformAST = async ({
         }
       }
 
-      const relativePathToDependency = path.relative(
-        path.join(outputDirectory, relativeInputFile, ".."),
+      const relativePathToDependency = posix.relative(
+        posix.join(outputDirectory, relativeInputFile, ".."),
         internalSourceFile.outputFilePath
       );
 
@@ -753,7 +738,7 @@ const transformAST = async ({
         if (metaName === "url") {
           replaceNode(parent, asLiteral(`file://${inputFile}`));
         } else if (metaName === "dirname") {
-          replaceNode(parent, asLiteral(path.dirname(inputFile)));
+          replaceNode(parent, asLiteral(posix.dirname(inputFile)));
         } else if (metaName === "filename") {
           replaceNode(parent, asLiteral(inputFile));
         } else if (metaName === "resolve" && grandParent?.type === "CallExpression") {
@@ -769,9 +754,9 @@ const transformAST = async ({
     },
     Identifier(node, _) {
       if (node.name === "__dirname") {
-        replaceNode(node, asLiteral(path.relative(process.cwd(), path.dirname(inputFile))));
+        replaceNode(node, asLiteral(posix.relative(process.cwd(), posix.dirname(inputFile))));
       } else if (node.name === "__filename") {
-        replaceNode(node, asLiteral(path.relative(process.cwd(), inputFile)));
+        replaceNode(node, asLiteral(posix.relative(process.cwd(), inputFile)));
       }
     },
   });
@@ -781,185 +766,21 @@ const transformAST = async ({
   return generate(ast);
 };
 
-const getStringNodeValue = (node: AnyNode | null | undefined): string | undefined => {
-  if (node) {
-    if (node.type === "Literal" && typeof node.value === "string") {
-      return node.value;
-    }
-    if (node.type === "TemplateLiteral") {
-      return node.quasis[0].value.cooked ?? undefined;
-    }
-    if (
-      node.type === "TaggedTemplateExpression" &&
-      node.tag.type === "MemberExpression" &&
-      node.tag.object.type === "Identifier" &&
-      node.tag.object.name === "String" &&
-      node.tag.property.type === "Identifier" &&
-      node.tag.property.name === "raw"
-    ) {
-      return node.quasi.quasis[0].value.cooked ?? undefined;
-    }
-  }
-};
-
-const replaceNode = (nodeToReplace: AnyNode, replacement: AnyNode): void => {
-  for (const key of Object.keys(nodeToReplace)) {
-    delete nodeToReplace[key as keyof AnyNode];
-  }
-  Object.assign(nodeToReplace, replacement);
-};
-
-const asLiteral = (value: string): Literal & { value: string; raw: string } => {
-  return { type: "Literal", value, raw: JSON.stringify(value), start: -1, end: -1 };
-};
-
-const isRequire = (node: AnyNode) => {
-  return Boolean(
-    node &&
-      node.type === "CallExpression" &&
-      node.callee &&
-      node.callee.type === "Identifier" &&
-      node.callee.name === "require"
-  );
-};
-
-const isCreateRequire = (node: AnyNode) => {
-  return Boolean(
-    node &&
-      node.type === "CallExpression" &&
-      node.callee &&
-      node.callee.type === "Identifier" &&
-      node.callee.name === "createRequire"
-  );
-};
-
-const isRequireMainRequire = (node: AnyNode) => {
-  return Boolean(
-    node &&
-      node.type === "CallExpression" &&
-      node.type === "CallExpression" &&
-      node.callee &&
-      node.callee.type === "MemberExpression" &&
-      node.callee.object.type === "MemberExpression" &&
-      node.callee.object.object.type === "Identifier" &&
-      node.callee.object.object.name === "require" &&
-      node.callee.object.property.type === "Identifier" &&
-      node.callee.object.property.name === "main" &&
-      node.callee.property.type === "Identifier" &&
-      node.callee.property.name === "require"
-  );
-};
-
-const BUILTINS = new Set(builtinModules);
-const isNodeBuiltin = (dependency: string): boolean => {
-  if (dependency.startsWith("node:")) return true;
-  if (dependency === "test") return false;
-  return BUILTINS.has(dependency);
-};
-
-// -------------------------------------------------------------
-
-const MODULE_ONLY_NODE_TYPE_SET = new Set([
-  "ExportAllDeclaration",
-  "ExportDefaultDeclaration",
-  "ExportNamedDeclaration",
-  "ExportSpecifier",
-  "ImportAttribute",
-  "ImportDeclaration",
-  "ImportDefaultSpecifier",
-  "ImportNamespaceSpecifier",
-  "ImportSpecifier",
-]);
-
-const determineModuleTypeFromAST = async (ast: AST) => {
-  return findNodeAt(ast, undefined, undefined, (nodeType) =>
-    MODULE_ONLY_NODE_TYPE_SET.has(nodeType)
-  )
-    ? ".mjs"
-    : ".cjs";
-};
-
-const determineModuleTypeFromPath = async (
-  dependencyEntryFilePath: string
-): Promise<".cjs" | ".mjs"> => {
-  const lowercaseExtension = dependencyEntryFilePath.toLowerCase().slice(-4);
-  if (lowercaseExtension === ".cjs" || lowercaseExtension === ".mjs") {
-    return lowercaseExtension;
-  } else {
-    const ast = parseModule(await fs.promises.readFile(dependencyEntryFilePath, "utf8"));
-    return determineModuleTypeFromAST(ast);
-  }
-};
-
-// ------
-
-const getContextualPathResolver = (
-  filePath: string,
-  resolverCache: Map<string, BasePathResolver>
-): BasePathResolver => {
-  const dirname = path.join(filePath, "..");
-  const resolveData = resolverCache.get(dirname);
-  if (resolveData === undefined) {
-    const tsconfig: TsConfigResult = getTsconfig(filePath, "tsconfig.json") ??
-      getTsconfig(filePath, "jsconfig.json") ?? {
-        path: "",
-        config: { compilerOptions: { baseUrl: undefined, paths: {} } },
-      };
-    const resolver = createPathsMatcher(tsconfig) ?? ((input: string) => [input]);
-    resolverCache.set(dirname, resolver);
-    return resolver;
-  } else {
-    return resolveData;
-  }
-};
-
-const KNOWN_EXT_REGEX = /\.([jt]sx?|[cm][jt]s)$/i;
-type KnownExtension = "js" | "ts" | "jsx" | "tsx" | "cjs" | "cts" | "mjs" | "mts";
-type Strategy = "ts>tsx" | "tsx>ts" | "mts" | "cts" | "mjs" | "cjs" | "js>jsx" | "jsx>js";
-
-const EXT_ORDER_MAP_MODULE = {
-  // ts
-  ts: ["ts>tsx", "mts", "mjs", "js>jsx", "cts", "cjs"],
-  tsx: ["tsx>ts", "jsx>js", "mts", "mjs", "cts", "cjs"],
-  cts: ["cts", "cjs", "tsx>ts", "jsx>js", "mts", "mjs"],
-  mts: ["mts", "mjs", "ts>tsx", "js>jsx", "cts", "cjs"],
-  // js
-  jsx: ["jsx>js", "tsx>ts", "mjs", "mts", "cjs", "cts"],
-  cjs: ["cjs", "cts", "jsx>js", "tsx>ts", "mjs", "mts"],
-  mjs: ["mjs", "mts", "js>jsx", "ts>tsx", "cjs", "cts"],
-  // use default order
-  js: undefined,
-} as const;
-const EXT_ORDER_MAP_COMMONJS = {
-  // ts
-  ts: ["ts>tsx", "js>jsx", "cts", "cjs"],
-  tsx: ["tsx>ts", "jsx>js", "cts", "cjs"],
-  cts: ["cts", "cjs", "tsx>ts", "jsx>js"],
-  mts: ["mts", "mjs", "ts>tsx", "js>jsx", "cts", "cjs"],
-  // js
-  jsx: ["jsx>js", "tsx>ts", "cjs", "cts"],
-  cjs: ["cjs", "cts", "jsx>js", "tsx>ts"],
-  mjs: ["mjs", "mts", "js>jsx", "ts>tsx", "cjs", "cts"],
-  // use default order
-  js: undefined,
-} as const;
-
 export const resolveLocalImport = ({
   method,
   absImportPath: absImportPathMaybeWithSlash,
-  rawImportPath,
   importedFrom,
   getResolvedFile,
+  rawImportPath,
 }: {
-  method: "require" | "import" | "entry";
+  method: "require" | "import";
   absImportPath: string;
-  rawImportPath: string;
   importedFrom: string;
   getResolvedFile: (filePath: string) => string | undefined;
+  rawImportPath: string;
 }): string => {
-  importedFrom = method === "entry" ? "" : importedFrom;
-  const parentExt = path.extname(importedFrom).slice(1).toLowerCase();
-  const absImportPath = path.join(absImportPathMaybeWithSlash, ".");
+  const parentExt = posix.extname(importedFrom).slice(1).toLowerCase();
+  const absImportPath = posix.join(absImportPathMaybeWithSlash, ".");
 
   const isParentTsFile = ["ts", "mts", "tsx", "cts"].includes(parentExt);
   let knownImportExt = getKnownExt(absImportPath);
@@ -980,55 +801,49 @@ export const resolveLocalImport = ({
         EXT_ORDER_MAP_MODULE[isParentTsFile ? "cts" : "cjs"];
 
   const resolveAsDirectory = () => {
-    for (const strategy of otherExtOrder) {
-      const file = runStrategy({
-        base: absImportPath + "/index",
-        strategy,
-        getResolvedFile,
-      });
+    for (const ext of otherExtOrder) {
+      const file = getResolvedFile(absImportPath + "/index." + ext);
       if (file) return file;
     }
   };
 
-  if (knownImportExt) {
-    const order =
-      (method === "import"
-        ? EXT_ORDER_MAP_MODULE[knownImportExt]
-        : EXT_ORDER_MAP_COMMONJS[knownImportExt]) ?? otherExtOrder;
+  try {
+    if (knownImportExt) {
+      const order =
+        (method === "import"
+          ? EXT_ORDER_MAP_MODULE[knownImportExt]
+          : EXT_ORDER_MAP_COMMONJS[knownImportExt]) ?? otherExtOrder;
 
-    return (
-      getResolvedFile(absImportPath.slice(0, -knownImportExt.length) + knownImportExt) ??
-      resolveLocalImportKnownExt({
+      return (
+        getResolvedFile(absImportPath.slice(0, -knownImportExt.length) + knownImportExt) ??
+        resolveLocalImportKnownExt({
+          absImportPath,
+          order,
+          getResolvedFile,
+          resolveAsDirectory,
+        })
+      );
+    } else {
+      return resolveLocalImportUnknownExt({
         absImportPath,
-        order,
+        order: otherExtOrder,
         getResolvedFile,
         resolveAsDirectory,
-        importedFrom,
-        rawImportPath,
-      })
-    );
-  } else {
-    return resolveLocalImportUnknownExt({
-      absImportPath,
-      order: otherExtOrder,
-      getResolvedFile,
-      resolveAsDirectory,
-      importedFrom,
-      rawImportPath,
-    });
+      });
+    }
+  } catch (error) {
+    throw error instanceof CouldNotFindImportError
+      ? new XnrError(
+          `Could not find import:\n  ${rawImportPath}${
+            importedFrom ? `\nfrom:\n  ${toNiceFilePath(importedFrom)}` : ""
+          }`
+        )
+      : error;
   }
 };
 
 const toNiceFilePath = (filePath: string) => {
-  return filePath.startsWith(process.cwd()) ? path.relative(process.cwd(), filePath) : filePath;
-};
-
-const isNodeStringLiteral = (
-  node: AnyNode | null | undefined
-): node is Literal & { value: string; raw: string } => {
-  return node
-    ? node.type === "Literal" && typeof node.value === "string" && typeof node.raw === "string"
-    : false;
+  return filePath.startsWith(process.cwd()) ? posix.relative(process.cwd(), filePath) : filePath;
 };
 
 const resolveLocalImportUnknownExt = ({
@@ -1036,29 +851,21 @@ const resolveLocalImportUnknownExt = ({
   order,
   getResolvedFile,
   resolveAsDirectory,
-  importedFrom,
-  rawImportPath,
 }: {
   absImportPath: string;
-  order: readonly Strategy[];
+  order: readonly KnownExtension[];
   getResolvedFile: (filePath: string) => string | undefined;
   resolveAsDirectory: () => string | undefined;
-  importedFrom: string;
-  rawImportPath: string;
 }): string => {
   const file = getResolvedFile(absImportPath) ?? resolveAsDirectory();
   if (file) return file;
 
-  for (const strategy of order) {
-    const file = runStrategy({ base: absImportPath, strategy, getResolvedFile });
+  for (const ext of order) {
+    const file = getResolvedFile(absImportPath + "." + ext);
     if (file) return file;
   }
 
-  throw new XnrError(
-    `Could not find import:\n  ${rawImportPath}${
-      importedFrom ? `\nfrom:\n  ${toNiceFilePath(importedFrom)}` : ""
-    }`
-  );
+  throw new CouldNotFindImportError();
 };
 
 const resolveLocalImportKnownExt = ({
@@ -1066,78 +873,26 @@ const resolveLocalImportKnownExt = ({
   order,
   getResolvedFile,
   resolveAsDirectory,
-  importedFrom,
-  rawImportPath,
 }: {
   absImportPath: string;
-  order: readonly Strategy[];
+  order: readonly KnownExtension[];
   getResolvedFile: (filePath: string) => string | undefined;
   resolveAsDirectory: () => string | undefined;
-  importedFrom: string;
-  rawImportPath: string;
 }): string => {
   const file = resolveAsDirectory();
   if (file) return file;
 
   const absImportPathWithoutExt = absImportPath.slice(
     0,
-    absImportPath.length - path.extname(absImportPath).length
+    absImportPath.length - posix.extname(absImportPath).length
   );
 
-  for (const strategy of order) {
-    const file = runStrategy({
-      base: absImportPathWithoutExt,
-      strategy,
-      getResolvedFile,
-    });
+  for (const ext of order) {
+    const file = getResolvedFile(absImportPathWithoutExt + "." + ext);
     if (file) return file;
   }
 
-  throw new XnrError(
-    `Could not find import:\n  ${rawImportPath}${
-      importedFrom ? `\nfrom:\n  ${toNiceFilePath(importedFrom)}` : ""
-    }`
-  );
+  throw new CouldNotFindImportError();
 };
 
-const runStrategy = ({
-  base,
-  strategy,
-  getResolvedFile,
-}: {
-  base: string;
-  strategy: Strategy;
-  getResolvedFile: (filePath: string) => string | undefined;
-}) => {
-  // eslint-disable-next-line unicorn/prefer-switch
-  if (strategy === "ts>tsx") {
-    return getResolvedFile(base + ".ts") ?? getResolvedFile(base + ".tsx");
-  } else if (strategy === "tsx>ts") {
-    return getResolvedFile(base + ".tsx") ?? getResolvedFile(base + ".ts");
-  } else if (strategy === "js>jsx") {
-    return getResolvedFile(base + ".js") ?? getResolvedFile(base + ".jsx");
-  } else if (strategy === "jsx>js") {
-    return getResolvedFile(base + ".jsx") ?? getResolvedFile(base + ".js");
-  } else if (strategy === "cts") {
-    return getResolvedFile(base + ".cts");
-  } else if (strategy === "mts") {
-    return getResolvedFile(base + ".mts");
-  } else if (strategy === "cjs") {
-    return getResolvedFile(base + ".cjs");
-  } else {
-    return getResolvedFile(base + ".mjs");
-  }
-};
-
-const getKnownExt = (filePath: string): KnownExtension | undefined => {
-  const match = KNOWN_EXT_REGEX.exec(path.extname(filePath));
-  return match ? (match[0].slice(1).toLowerCase() as KnownExtension) : undefined;
-};
-
-const stripAnsi = (string: string) => {
-  return string.replaceAll(
-    // eslint-disable-next-line no-control-regex
-    /\u001B\[\d+m/g,
-    ""
-  );
-};
+export { XnrError } from "./helpers";

@@ -1,7 +1,7 @@
 import { fork } from "node:child_process";
 import fs from "node:fs/promises";
 import { tmpdir } from "node:os";
-import path from "node:path/posix";
+import path from "node:path";
 import process from "node:process";
 
 import { build, run } from "./index.ts";
