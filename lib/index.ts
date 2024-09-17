@@ -5,7 +5,7 @@ import process from "node:process";
 
 import { calcOutput, Output } from "./utils/calcOutput";
 import { createSourceFileTree } from "./utils/createSourceFileTree";
-import { XnrError } from "./utils/newHelpers";
+import { XnrError } from "./utils/utils";
 
 export { type Output } from "./utils/calcOutput";
 export { transform } from "./utils/transform";
@@ -235,4 +235,4 @@ const stripAnsi = (string: string) => {
   );
 };
 
-export { XnrError } from "./helpers";
+export { XnrError } from "./utils/utils";

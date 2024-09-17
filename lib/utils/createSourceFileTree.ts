@@ -6,9 +6,9 @@ import { Expression, Literal, Program } from "acorn";
 import { simple } from "acorn-walk";
 import { createPathsMatcher, getTsconfig, TsConfigResult } from "get-tsconfig";
 
-import { KnownExtension, Method, parseModule, prettyPath, XnrError } from "./newHelpers";
-import { getStringNodeValue, isNodeStringLiteral, isRequire, isRequireMainRequire } from "./shared";
+import { getStringNodeValue, isNodeStringLiteral, isRequire, isRequireMainRequire } from "./ast";
 import { transformSync } from "./transform";
+import { KnownExtension, Method, parseModule, prettyPath, XnrError } from "./utils";
 
 const EXT_ORDER_MAP_MODULE: Record<KnownExtension, KnownExtension[]> = {
   // ts

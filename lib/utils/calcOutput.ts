@@ -7,7 +7,6 @@ import { ancestor } from "acorn-walk";
 import { generate } from "astring";
 import { resolve as importResolve } from "import-meta-resolve";
 
-import { determineModuleType, Method, prettyPath, XnrError } from "./newHelpers";
 import {
   asLiteral,
   getStringNodeValue,
@@ -16,7 +15,8 @@ import {
   isRequire,
   isRequireMainRequire,
   replaceNode,
-} from "./shared";
+} from "./ast";
+import { determineModuleType, Method, prettyPath, XnrError } from "./utils";
 
 type LocalDependency = {
   method: Method;

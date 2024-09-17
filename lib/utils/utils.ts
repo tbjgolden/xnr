@@ -1,6 +1,5 @@
 import fs from "node:fs";
 import fsPath from "node:path";
-import posix from "node:path/posix";
 
 import { Options, parse } from "acorn";
 import { findNodeAt } from "acorn-walk";
@@ -8,10 +7,14 @@ import { findNodeAt } from "acorn-walk";
 export type Method = "import" | "require";
 export type KnownExtension = "js" | "ts" | "jsx" | "tsx" | "cjs" | "cts" | "mjs" | "mts";
 
-const KNOWN_EXT_REGEX = /\.([jt]sx?|[cm][jt]s)$/i;
+const KNOWN_EXT_SET = new Set(
+  // prettier-ignore
+  ["js", "ts", "jsx", "tsx", "cjs", "cts", "mjs", "mts"]
+);
+
 export const getKnownExt = (filePath: string): KnownExtension | undefined => {
-  const match = KNOWN_EXT_REGEX.exec(posix.extname(filePath));
-  return match ? (match[0].slice(1).toLowerCase() as KnownExtension) : undefined;
+  const ext = fsPath.extname(filePath).slice(1).toLowerCase();
+  return KNOWN_EXT_SET.has(ext) ? (ext as KnownExtension) : undefined;
 };
 
 export class XnrError extends Error {
