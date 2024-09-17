@@ -43,12 +43,14 @@ test("tsconfig support", async () => {
 });
 test("error handling stderr", async () => {
   try {
-    await runNodeScript(`lib/__fixtures__/error-handling/cant-resolve.ts`);
+    await runNodeScript(fsPath.join("lib", "__fixtures__", "error-handling", "cant-resolve.ts"));
     expect("didThrow").toBe(true);
   } catch (error) {
     if (error instanceof Error) {
       expect(error.message).toMatch(`Could not find import:\n  ./not-a-real-file`);
-      expect(error.message).toMatch(`from:\n  lib/__fixtures__/error-handling/cant-resolve.ts`);
+      expect(error.message).toMatch(
+        `from:\n  ${fsPath.join("lib", "__fixtures__", "error-handling", "cant-resolve.ts")}`
+      );
     } else {
       expect("didThrowError").toBe(true);
     }
@@ -56,10 +58,9 @@ test("error handling stderr", async () => {
 });
 test("error handling syntax error", async () => {
   const syntaxErrorRegex = new RegExp(
-    `^${`Error transforming ${process.cwd()}/lib/__fixtures__/error-handling/syntax-error:`.replaceAll(
-      /[$()*+.?[\\\]^{|}]/g,
-      String.raw`\$&`
-    )}`
+    `^${`Error transforming ${fsPath.resolve(
+      "lib/__fixtures__/error-handling/syntax-error"
+    )}:`.replaceAll(/[$()*+.?[\\\]^{|}]/g, String.raw`\$&`)}`
   );
 
   await expect(runNodeScript(`lib/__fixtures__/error-handling/syntax-error`)).rejects.toThrowError(
@@ -94,7 +95,7 @@ test("handles external deps", async () => {
 });
 test("in tmpdir outside ts project", async () => {
   const entryPath = fsPath.resolve(tmpdir(), "xnr-run-test/test.ts");
-  const entryDirectory = fsPath.join(entryPath, "..");
+  const entryDirectory = fsPath.dirname(entryPath);
   await fs.rm(entryDirectory, { recursive: true, force: true });
   await fs.mkdir(entryDirectory, { recursive: true });
   await fs.writeFile(entryPath, 'console.log("test" as string);');
@@ -102,25 +103,31 @@ test("in tmpdir outside ts project", async () => {
   await fs.rm(entryDirectory, { recursive: true, force: true });
 });
 test("import dot", async () => {
-  expect(await runNodeScript("lib/__fixtures__/import-dot/index.test.ts")).toBe("magic");
+  expect(
+    await runNodeScript(fsPath.join("lib", "__fixtures__", "import-dot", "index.test.ts"))
+  ).toBe("magic");
 });
 test("import dot index", async () => {
-  expect(await runNodeScript("lib/__fixtures__/import-dot-index/index.test.ts")).toBe("magic");
+  expect(
+    await runNodeScript(fsPath.join("lib", "__fixtures__", "import-dot-index", "index.test.ts"))
+  ).toBe("magic");
 });
 test("new ts features", async () => {
   expect(
     await runNodeScript(
-      fsPath.join(process.cwd(), "lib/__fixtures__/new-ts-features/index.test.ts")
+      fsPath.join(process.cwd(), "lib", "__fixtures__", "new-ts-features", "index.test.ts")
     )
   ).toBe("click click i am lorenzo");
 });
 test("default run dir", async () => {
   // this has to be in build.test instead of run.test to avoid a race condition
-  await expect(run("lib/__fixtures__/new-ts-features/index.ts")).resolves.toBe(0);
+  await expect(
+    run(fsPath.join("lib", "__fixtures__", "new-ts-features", "index.ts"))
+  ).resolves.toBe(0);
 });
 
 const runNodeScript = async (entryFilePath: string): Promise<string> => {
-  const outputDirectory = fsPath.join(process.cwd(), "node_modules/.cache/xnr");
+  const outputDirectory = fsPath.resolve("node_modules/.cache/xnr");
 
   const absoluteEntryFilePath = fsPath.resolve(entryFilePath);
   const { entry } = await build({
@@ -145,7 +152,7 @@ const runNodeScript = async (entryFilePath: string): Promise<string> => {
 };
 
 const testBatch = async (subdir: string, expected: string) => {
-  const dirents = await fs.readdir(fsPath.join(process.cwd(), "lib/__fixtures__", subdir), {
+  const dirents = await fs.readdir(fsPath.join(process.cwd(), "lib", "__fixtures__", subdir), {
     withFileTypes: true,
   });
 
@@ -157,6 +164,6 @@ const testBatch = async (subdir: string, expected: string) => {
       return dirent.name;
     });
   for (const file of files) {
-    expect(await runNodeScript(`lib/__fixtures__/${subdir}/${file}`)).toEqual(expected);
+    expect(await runNodeScript(fsPath.join("lib", "__fixtures__", subdir, file))).toEqual(expected);
   }
 };
