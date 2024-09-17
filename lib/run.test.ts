@@ -61,27 +61,7 @@ test("run a file directly (error finding dir)", async () => {
   expect(stderr).toMatch(`from:\n  lib/__fixtures__/error-handling/cant-resolve-dir.ts`);
 });
 
-test("run a file directly (doesn't exist)", async () => {
-  let stdout = "";
-  let stderr = "";
-  await expect(
-    run({
-      filePath: "lib/__fixtures__/a/b/c",
-      outputDirectory: "node_modules/.cache/xnr-run-test",
-      writeStdout: (out) => {
-        stdout += out;
-      },
-      writeStderr: (err) => {
-        stderr += err;
-      },
-    })
-  ).resolves.toBe(1);
-  expect(stdout).toBe("");
-  expect(stderr).toMatch("Could not find import");
-  expect(stderr).toMatch("lib/__fixtures__/a/b/c");
-});
-
-test("run a file directly (doesn't exist)", async () => {
+test("run a file directly (file doesn't exist)", async () => {
   let stdout = "";
   let stderr = "";
   await expect(
@@ -97,7 +77,26 @@ test("run a file directly (doesn't exist)", async () => {
     })
   ).resolves.toBe(1);
   expect(stdout).toBe("");
-  expect(stderr).toMatch(`Could not find import:\n  lib/__fixtures__/a`);
+  expect(stderr).toMatch(`Could not find entry:\n  lib/__fixtures__/a`);
+});
+
+test("run a file directly (path doesn't exist)", async () => {
+  let stdout = "";
+  let stderr = "";
+  await expect(
+    run({
+      filePath: "lib/__fixtures__/a/b/c",
+      outputDirectory: "node_modules/.cache/xnr-run-test",
+      writeStdout: (out) => {
+        stdout += out;
+      },
+      writeStderr: (err) => {
+        stderr += err;
+      },
+    })
+  ).resolves.toBe(1);
+  expect(stdout).toBe("");
+  expect(stderr).toMatch("Could not find entry:\n  lib/__fixtures__/a/b/c");
 });
 
 test("run a file directly (success with stdout)", async () => {

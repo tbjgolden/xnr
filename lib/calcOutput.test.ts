@@ -10,7 +10,7 @@ test("calcOutput", async () => {
       {
         path: "import-all/mjs.mjs",
         contents:
-          'import {createRequire} from "node:module";\nimport a from "../default-export/cjs1.mjs";\nimport b from "../default-export/cjs2.mjs";\nimport d from "../default-export/mjs1.mjs";\nimport e from "../default-export/mjs2.mjs";\nimport f from "../default-export/mjs3.mjs";\nconst require = createRequire(import.meta.url);\nconst c = require("../default-export/cjs3.cjs");\na();\nb();\nc();\nd();\ne();\nf();\n',
+          'import d from "../default-export/mjs1.mjs";\nimport e from "../default-export/mjs2.mjs";\nimport f from "../default-export/mjs3.mjs";\nimport {createRequire} from "module";\nconst require = createRequire(import.meta.url);\nconst a = require("../default-export/cjs1.cjs");\nconst b = require("../default-export/cjs2.cjs");\nconst c = require("../default-export/cjs3.cjs");\na();\nb();\nc();\nd();\ne();\nf();\n',
         sourcePath: fsPath.resolve("lib/__fixtures__/import-all/mjs.ts"),
       },
       {
@@ -18,6 +18,18 @@ test("calcOutput", async () => {
         contents:
           'const fs = require("fs");\nconst path = require("path");\nconst fileStr = fs.readFileSync(path.join(process.cwd(), "lib/__fixtures__/file.json"), "utf8");\nmodule.exports = () => {\n  console.log(JSON.stringify(JSON.parse(fileStr)));\n};\n',
         sourcePath: fsPath.resolve("lib/__fixtures__/default-export/cjs3.ts"),
+      },
+      {
+        path: "default-export/cjs2.cjs",
+        contents:
+          'const fs = require("fs");\nconst path = require("path");\nmodule.exports = () => {\n  console.log(JSON.stringify(JSON.parse(fs.readFileSync(path.join(process.cwd(), "lib/__fixtures__/file.json"), "utf8"))));\n};\n',
+        sourcePath: fsPath.resolve("lib/__fixtures__/default-export/cjs2.js"),
+      },
+      {
+        path: "default-export/cjs1.cjs",
+        contents:
+          'const fs = require("fs");\nconst path = require("path");\nmodule.exports = () => {\n  console.log(JSON.stringify(JSON.parse(fs.readFileSync(path.join(process.cwd(), "lib/__fixtures__/file.json"), "utf8"))));\n};\n',
+        sourcePath: fsPath.resolve("lib/__fixtures__/default-export/cjs1.cjs"),
       },
       {
         path: "default-export/mjs3.mjs",
@@ -36,18 +48,6 @@ test("calcOutput", async () => {
         contents:
           'import fs from "fs";\nimport path from "path";\nexport default () => {\n  console.log(JSON.stringify(JSON.parse(fs.readFileSync(path.join(process.cwd(), "lib/__fixtures__/file.json"), "utf8"))));\n};\n',
         sourcePath: fsPath.resolve("lib/__fixtures__/default-export/mjs1.js"),
-      },
-      {
-        path: "default-export/cjs2.mjs",
-        contents:
-          'const fs = require("fs");\nconst path = require("path");\nmodule.exports = () => {\n  console.log(JSON.stringify(JSON.parse(fs.readFileSync(path.join(process.cwd(), "lib/__fixtures__/file.json"), "utf8"))));\n};\n',
-        sourcePath: fsPath.resolve("lib/__fixtures__/default-export/cjs2.js"),
-      },
-      {
-        path: "default-export/cjs1.mjs",
-        contents:
-          'const fs = require("fs");\nconst path = require("path");\nmodule.exports = () => {\n  console.log(JSON.stringify(JSON.parse(fs.readFileSync(path.join(process.cwd(), "lib/__fixtures__/file.json"), "utf8"))));\n};\n',
-        sourcePath: fsPath.resolve("lib/__fixtures__/default-export/cjs1.cjs"),
       },
     ],
   });

@@ -43,12 +43,9 @@ const EXT_ORDER_MAP_COMMONJS: Record<KnownExtension, KnownExtension[]> = {
 };
 
 class XnrCannotResolveError extends Error {
-  absPath: string;
-
-  constructor(absPath: string) {
+  constructor() {
     super();
     this.name = "XnrCannotResolveError";
-    this.absPath = absPath;
   }
 }
 
@@ -66,14 +63,14 @@ export type SourceFileNode = {
 
 export const createSourceFileTree = (path: string): SourceFileNode => {
   const resolve = createResolve();
+  const absPath = fsPath.resolve(path);
 
   let absResolvedPath: string;
   try {
-    const absPath = fsPath.resolve(path);
     absResolvedPath = resolve({ absPath, method: determineModuleType(absPath) });
   } catch (error) {
     if (error instanceof XnrCannotResolveError) {
-      throw new XnrError(`Could not find import:\n  ${prettyPath(error.absPath)}`);
+      throw new XnrError(`Could not find entry:\n  ${prettyPath(absPath)}`);
     }
     throw error;
   }
@@ -85,6 +82,11 @@ export const createSourceFileTree = (path: string): SourceFileNode => {
     resultCache: new Map<string, SourceFileNode>(),
     resolverCache: new Map<string, BasePathResolver>(),
   });
+};
+
+const isJsonExt = (absFilePath: string) => {
+  const ext = fsPath.extname(absFilePath).slice(1).toLowerCase();
+  return ext.startsWith("json");
 };
 
 const createSourceFileTreeRecursive = ({
@@ -101,8 +103,8 @@ const createSourceFileTreeRecursive = ({
   resolverCache: Map<string, BasePathResolver>;
 }): SourceFileNode => {
   let code = fs.readFileSync(absResolvedPath, "utf8");
-  if (fsPath.extname(absResolvedPath).toLowerCase().startsWith(".json")) {
-    // special case if the file is json
+
+  if (isJsonExt(absResolvedPath)) {
     code = "module.exports = " + code;
   }
 
@@ -134,24 +136,24 @@ const createSourceFileTreeRecursive = ({
             absPath: absTsResolvedPath,
             method: rawImport.method,
           });
-          if (absResolvedImportPath) {
-            const cachedResult = resultCache.get(absResolvedImportPath);
-            return cachedResult
-              ? [{ method: rawImport.method, raw: rawImport.importPath, file: cachedResult }]
-              : [
-                  {
-                    method: rawImport.method,
-                    raw: rawImport.importPath,
-                    file: createSourceFileTreeRecursive({
-                      absResolvedPath: absResolvedImportPath,
-                      resolve,
-                      astCache,
-                      resultCache,
-                      resolverCache,
-                    }),
-                  },
-                ];
-          }
+
+          const cachedResult = resultCache.get(absResolvedImportPath);
+          const method = isJsonExt(absResolvedImportPath) ? "require" : rawImport.method;
+          return cachedResult
+            ? [{ method, raw: rawImport.importPath, file: cachedResult }]
+            : [
+                {
+                  method,
+                  raw: rawImport.importPath,
+                  file: createSourceFileTreeRecursive({
+                    absResolvedPath: absResolvedImportPath,
+                    resolve,
+                    astCache,
+                    resultCache,
+                    resolverCache,
+                  }),
+                },
+              ];
         } catch (error) {
           if (error instanceof XnrCannotResolveError) {
             firstError ??= error;
@@ -166,7 +168,7 @@ const createSourceFileTreeRecursive = ({
     }
     if (firstError) {
       throw new XnrError(
-        `Could not find import:\n  ${prettyPath(firstError.absPath)}\nfrom:\n  ${prettyPath(
+        `Could not find import:\n  ${prettyPath(rawImport.importPath)}\nfrom:\n  ${prettyPath(
           absResolvedPath
         )}`
       );
@@ -286,7 +288,7 @@ export const createResolve = () => {
       }
     }
 
-    throw new XnrCannotResolveError(absPath);
+    throw new XnrCannotResolveError();
   };
 
   return resolve;

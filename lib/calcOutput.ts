@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import fsPath from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { AnyNode, AssignmentProperty, Program, VariableDeclaration } from "acorn";
 import { ancestor } from "acorn-walk";
@@ -16,7 +16,7 @@ import {
   isRequireMainRequire,
   replaceNode,
 } from "./ast";
-import { determineModuleType, Method, prettyPath, XnrError } from "./utils";
+import { determineModuleType, isNodeBuiltin, Method, prettyPath, XnrError } from "./utils";
 
 type LocalDependency = {
   method: Method;
@@ -173,73 +173,68 @@ const calcFileOutput = ({
 
         const localDependency = importPathMap.get(node.source.value);
 
-        if (localDependency && namedImports.length > 0) {
-          const getDependencyEntryFilePath = () => {
-            let dependencyEntryFilePath: string;
+        if (!isNodeBuiltin(node.source.value) && namedImports.length > 0) {
+          let absDependencyEntryFilePath: string;
 
-            try {
-              const fileUrl = importResolve(localDependency, "file://" + file.path);
-              dependencyEntryFilePath = fileURLToPath(fileUrl);
-            } catch {
-              throw new XnrError(
-                `Could not import ${JSON.stringify(localDependency)} from ${prettyPath(file.path)}`
-              );
-            }
+          try {
+            const fileUrl = importResolve(
+              localDependency ?? node.source.value,
+              pathToFileURL(file.path).toString()
+            );
+            absDependencyEntryFilePath = fsPath.resolve(fileURLToPath(fileUrl));
 
-            return dependencyEntryFilePath;
-          };
+            const dependencyModuleType = determineModuleType(absDependencyEntryFilePath);
 
-          const dependencyModuleType = determineModuleType(getDependencyEntryFilePath());
+            if (dependencyModuleType === "require") {
+              const uniqueID = defaultImport ?? `xnr_${randomUUID().slice(-12)}`;
 
-          if (dependencyModuleType === "require") {
-            const uniqueID = defaultImport ?? `xnr_${randomUUID().slice(-12)}`;
-
-            const cjs: VariableDeclaration = {
-              type: "VariableDeclaration",
-              declarations: [
-                {
-                  type: "VariableDeclarator",
-                  id: {
-                    type: "ObjectPattern",
-                    properties: namedImports.map(
-                      ([key, value]: [string, string]): AssignmentProperty => {
-                        return {
-                          type: "Property",
-                          key: { type: "Identifier", name: key, start: -1, end: -1 },
-                          computed: false,
-                          value: { type: "Identifier", name: value, start: -1, end: -1 },
-                          kind: "init",
-                          method: false,
-                          shorthand: key === value,
-                          start: -1,
-                          end: -1,
-                        };
-                      }
-                    ),
+              const cjs: VariableDeclaration = {
+                type: "VariableDeclaration",
+                declarations: [
+                  {
+                    type: "VariableDeclarator",
+                    id: {
+                      type: "ObjectPattern",
+                      properties: namedImports.map(
+                        ([key, value]: [string, string]): AssignmentProperty => {
+                          return {
+                            type: "Property",
+                            key: { type: "Identifier", name: key, start: -1, end: -1 },
+                            computed: false,
+                            value: { type: "Identifier", name: value, start: -1, end: -1 },
+                            kind: "init",
+                            method: false,
+                            shorthand: key === value,
+                            start: -1,
+                            end: -1,
+                          };
+                        }
+                      ),
+                      start: -1,
+                      end: -1,
+                    },
+                    init: { type: "Identifier", name: uniqueID, start: -1, end: -1 },
                     start: -1,
                     end: -1,
                   },
-                  init: { type: "Identifier", name: uniqueID, start: -1, end: -1 },
+                ],
+                kind: "const",
+                start: -1,
+                end: -1,
+              };
+
+              node.specifiers = [
+                {
+                  type: "ImportDefaultSpecifier",
+                  local: { type: "Identifier", name: uniqueID, start: -1, end: -1 },
                   start: -1,
                   end: -1,
                 },
-              ],
-              kind: "const",
-              start: -1,
-              end: -1,
-            };
+              ];
 
-            node.specifiers = [
-              {
-                type: "ImportDefaultSpecifier",
-                local: { type: "Identifier", name: uniqueID, start: -1, end: -1 },
-                start: -1,
-                end: -1,
-              },
-            ];
-
-            parent.body.splice(parent.body.indexOf(node) + 1, 0, cjs);
-          }
+              parent.body.splice(parent.body.indexOf(node) + 1, 0, cjs);
+            }
+          } catch {}
         }
 
         if (localDependency) {
@@ -250,25 +245,7 @@ const calcFileOutput = ({
     ExportNamedDeclaration: rewriteNodeWithSource,
     ExportAllDeclaration: rewriteNodeWithSource,
     CallExpression(node) {
-      if (isCreateRequire(node)) {
-        node.arguments = [
-          {
-            type: "MemberExpression",
-            object: {
-              type: "MetaProperty",
-              meta: { type: "Identifier", name: "import", start: -1, end: -1 },
-              property: { type: "Identifier", name: "meta", start: -1, end: -1 },
-              start: -1,
-              end: -1,
-            },
-            property: { type: "Identifier", name: "url", start: -1, end: -1 },
-            computed: false,
-            optional: false,
-            start: -1,
-            end: -1,
-          },
-        ];
-      } else if (isRequire(node)) {
+      if (isRequire(node)) {
         rewriteNodeWithSourceAsFirstArg(node);
       } else if (isRequireMainRequire(node)) {
         const value = getStringNodeValue(node.arguments[0]);

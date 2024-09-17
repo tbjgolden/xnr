@@ -103,7 +103,7 @@ async function handleBuild({ filePath, outputDirectory }: ParsedArgs) {
         result.files.length === 1 ? "" : "s"
       }. Run with:`
     );
-    console.log(`  node '${path.relative(process.cwd(), result.entrypoint)}'`);
+    console.log(`  node '${path.relative(process.cwd(), result.entry)}'`);
   } catch (error) {
     console.error("Build failed:", error);
     process.exit(1);

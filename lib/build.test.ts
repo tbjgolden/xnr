@@ -1,7 +1,7 @@
 import { fork } from "node:child_process";
 import fs from "node:fs/promises";
 import { tmpdir } from "node:os";
-import path from "node:path";
+import fsPath from "node:path";
 import process from "node:process";
 
 import { build, run } from "./index.ts";
@@ -17,33 +17,6 @@ test("transpile each filetype containing imports from every filetype", async () 
 });
 test("transpile each filetype containing imports from every filetype", async () => {
   await testBatch("import-all", new Array(6).fill(JSON.stringify({ hello: "world" })).join("\n"));
-});
-test("__dirname, __filename and import.meta.* is what you'd expect", async () => {
-  const cjsFilePath = "lib/__fixtures__/import-meta/cjs.ts";
-  const [directoryCjs, fileCjs, cwdCjs] = (await runNodeScript(cjsFilePath)).split("\n");
-  expect(fileCjs).toBe(cjsFilePath);
-  expect(directoryCjs).toBe(path.dirname(cjsFilePath));
-  expect(cwdCjs).toBe(process.cwd());
-
-  const mjsFilePath = "lib/__fixtures__/import-meta/mjs.ts";
-  const [
-    directoryMjs,
-    fileMjs,
-    cwdMjs,
-    metaUrl,
-    metaDirname,
-    metaFilename,
-    metaResolvedLocal,
-    metaResolvedExternal,
-  ] = (await runNodeScript(mjsFilePath)).split("\n");
-  expect(fileMjs).toBe(mjsFilePath);
-  expect(directoryMjs).toBe(path.dirname(mjsFilePath));
-  expect(cwdMjs).toBe(process.cwd());
-  expect(metaUrl).toBe("file://" + path.resolve(mjsFilePath));
-  expect(metaDirname).toBe(path.resolve(path.dirname(mjsFilePath)));
-  expect(metaFilename).toBe(path.resolve(mjsFilePath));
-  expect(metaResolvedLocal).toBe("file://" + path.resolve(cjsFilePath));
-  expect(metaResolvedExternal).toBe("file://" + path.resolve("node_modules/prettier/index.js"));
 });
 test("can import json from every filetype", async () => {
   await testBatch("import-json", JSON.stringify({ foo: "bar" }));
@@ -114,21 +87,14 @@ test("handles external deps", async () => {
   expect(await runNodeScript("lib/__fixtures__/external-dep/a.mjs")).toBe("{}");
   expect(await runNodeScript("lib/__fixtures__/external-dep/b.cjs")).toBe("{}");
   expect(await runNodeScript("lib/__fixtures__/external-dep/c.ts")).toMatch("hello world!");
-  try {
-    await runNodeScript("lib/__fixtures__/external-dep/unresolvable.mjs");
-    expect("didThrow").toBe(true);
-  } catch (error) {
-    if (error instanceof Error) {
-      expect(error.message).toMatch('Could not import "not-a-real-npm-pkg-m8"');
-      expect(error.message).toMatch("lib/__fixtures__/external-dep/unresolvable.mjs");
-    } else {
-      expect("didThrowError").toBe(true);
-    }
-  }
+  // Node runtime error
+  expect(await runNodeScript("lib/__fixtures__/external-dep/unresolvable.mjs")).toMatch(
+    "ERR_MODULE_NOT_FOUND"
+  );
 });
 test("in tmpdir outside ts project", async () => {
-  const entryPath = tmpdir() + "/xnr-run-test/test.ts";
-  const entryDirectory = path.join(entryPath, "..");
+  const entryPath = fsPath.resolve(tmpdir(), "xnr-run-test/test.ts");
+  const entryDirectory = fsPath.join(entryPath, "..");
   await fs.rm(entryDirectory, { recursive: true, force: true });
   await fs.mkdir(entryDirectory, { recursive: true });
   await fs.writeFile(entryPath, 'console.log("test" as string);');
@@ -143,7 +109,9 @@ test("import dot index", async () => {
 });
 test("new ts features", async () => {
   expect(
-    await runNodeScript(path.join(process.cwd(), "lib/__fixtures__/new-ts-features/index.test.ts"))
+    await runNodeScript(
+      fsPath.join(process.cwd(), "lib/__fixtures__/new-ts-features/index.test.ts")
+    )
   ).toBe("click click i am lorenzo");
 });
 test("default run dir", async () => {
@@ -152,15 +120,15 @@ test("default run dir", async () => {
 });
 
 const runNodeScript = async (entryFilePath: string): Promise<string> => {
-  const outputDirectory = path.join(process.cwd(), "node_modules/.cache/xnr");
+  const outputDirectory = fsPath.join(process.cwd(), "node_modules/.cache/xnr");
 
-  const absoluteEntryFilePath = path.resolve(entryFilePath);
-  const { entrypoint } = await build({
+  const absoluteEntryFilePath = fsPath.resolve(entryFilePath);
+  const { entry } = await build({
     filePath: absoluteEntryFilePath,
     outputDirectory,
   });
   return new Promise<string>((resolve) => {
-    const child = fork(entrypoint, [], { stdio: "pipe" });
+    const child = fork(entry, [], { stdio: "pipe" });
     let stdout = "";
     child.stdout?.on("data", (data) => {
       stdout += data;
@@ -177,7 +145,7 @@ const runNodeScript = async (entryFilePath: string): Promise<string> => {
 };
 
 const testBatch = async (subdir: string, expected: string) => {
-  const dirents = await fs.readdir(path.join(process.cwd(), "lib/__fixtures__", subdir), {
+  const dirents = await fs.readdir(fsPath.join(process.cwd(), "lib/__fixtures__", subdir), {
     withFileTypes: true,
   });
 

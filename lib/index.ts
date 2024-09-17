@@ -3,12 +3,12 @@ import fs from "node:fs";
 import fsPath from "node:path";
 import process from "node:process";
 
-import { calcOutput, Output } from "./utils/calcOutput";
-import { createSourceFileTree } from "./utils/createSourceFileTree";
-import { XnrError } from "./utils/utils";
+import { calcOutput, Output } from "./calcOutput";
+import { createSourceFileTree } from "./createSourceFileTree";
+import { XnrError } from "./utils";
 
-export { type Output } from "./utils/calcOutput";
-export { transform } from "./utils/transform";
+export { type Output } from "./calcOutput";
+export { transform } from "./transform";
 
 /**
  * Converts all local source code starting from an entry file into a runnable array of Node.js compatible file contents.
@@ -38,19 +38,19 @@ export const build = async ({
   filePath: string;
   outputDirectory: string;
 }): Promise<Output> => {
-  const output = await transpile({ filePath });
+  const { entry, files } = await transpile({ filePath });
 
   outputDirectory = fsPath.resolve(outputDirectory);
   fs.rmSync(outputDirectory, { recursive: true, force: true });
   fs.mkdirSync(outputDirectory, { recursive: true });
-  for (const { path, contents } of output.files) {
+  for (const { path, contents } of files) {
     const absPath = fsPath.join(outputDirectory, path);
     const dirname = fsPath.dirname(absPath);
     fs.mkdirSync(dirname, { recursive: true });
     fs.writeFileSync(absPath, contents);
   }
 
-  return output;
+  return { entry: fsPath.resolve(outputDirectory, entry), files };
 };
 
 export type RunConfig = {
@@ -90,11 +90,11 @@ export const run = async (filePathOrConfig: string | RunConfig): Promise<number>
       outputDirectory = fsPath.resolve(outputDirectory_);
     } else {
       let current = fsPath.resolve(filePath);
-      let packageJsonPath: string | undefined;
+      let packageRootPath: string | undefined;
       while (true) {
         const packageJsonPath_ = fsPath.join(current, "package.json");
         if (fs.existsSync(packageJsonPath_)) {
-          packageJsonPath = packageJsonPath_;
+          packageRootPath = fsPath.dirname(packageJsonPath_);
           break;
         }
         const nextCurrent = fsPath.dirname(current);
@@ -103,8 +103,8 @@ export const run = async (filePathOrConfig: string | RunConfig): Promise<number>
         }
         current = nextCurrent;
       }
-      outputDirectory = packageJsonPath
-        ? fsPath.join(packageJsonPath, "../node_modules/.cache/xnr")
+      outputDirectory = packageRootPath
+        ? fsPath.join(packageRootPath, "node_modules/.cache/xnr")
         : fsPath.resolve(".tmp/xnr");
     }
   }
@@ -235,4 +235,4 @@ const stripAnsi = (string: string) => {
   );
 };
 
-export { XnrError } from "./utils/utils";
+export { XnrError } from "./utils";
