@@ -33,16 +33,6 @@ export const asLiteral = (value: string): Literal & { value: string; raw: string
   return { type: "Literal", value, raw: JSON.stringify(value), start: -1, end: -1 };
 };
 
-export const isRequire = (node: AnyNode) => {
-  return Boolean(
-    node &&
-      node.type === "CallExpression" &&
-      node.callee &&
-      node.callee.type === "Identifier" &&
-      node.callee.name === "require"
-  );
-};
-
 export const isCreateRequire = (node: AnyNode) => {
   return Boolean(
     node &&
@@ -53,10 +43,19 @@ export const isCreateRequire = (node: AnyNode) => {
   );
 };
 
-export const isRequireMainRequire = (node: AnyNode) => {
+export const isRequire = (node: AnyNode) => {
   return Boolean(
     node &&
       node.type === "CallExpression" &&
+      node.callee &&
+      node.callee.type === "Identifier" &&
+      node.callee.name === "require"
+  );
+};
+
+export const isRequireMainRequire = (node: AnyNode) => {
+  return Boolean(
+    node &&
       node.type === "CallExpression" &&
       node.callee &&
       node.callee.type === "MemberExpression" &&
@@ -90,7 +89,7 @@ const MODULE_ONLY_NODE_TYPE_SET = new Set([
   "ImportSpecifier",
 ]);
 
-export const determineModuleTypeFromAST = async (ast: AnyNode) => {
+export const determineModuleTypeFromAST = (ast: AnyNode) => {
   return findNodeAt(ast, undefined, undefined, (nodeType) =>
     MODULE_ONLY_NODE_TYPE_SET.has(nodeType)
   )

@@ -29,6 +29,7 @@ const config = [
       ...eslint.configs.recommended.rules,
       "no-warning-comments": "warn",
       "no-console": "off",
+      "no-empty": ["error", { allowEmptyCatch: true }],
     },
   },
   {

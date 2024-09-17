@@ -116,7 +116,7 @@
     ],
     "testEnvironment": "node",
     "testMatch": [
-      "<rootDir>/lib/*.test.[tj]s"
+      "<rootDir>/lib/**/*.test.[tj]s"
     ],
     "transform": {
       "\\.ts$": "<rootDir>/node_modules/xnr/jest.js"
