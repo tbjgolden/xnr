@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import fsPath from "node:path";
 
 import { run } from "./index.ts";
 
@@ -38,7 +39,9 @@ test("run a file directly (error)", async () => {
   ).resolves.toBe(1);
   expect(stdout).toBe("");
   expect(stderr).toMatch(`Could not find import:\n  ./not-a-real-file`);
-  expect(stderr).toMatch(`from:\n  lib/__fixtures__/error-handling/cant-resolve.ts`);
+  expect(stderr).toMatch(
+    `from:\n  ${fsPath.join("lib", "__fixtures__", "error-handling", "cant-resolve.ts")}`
+  );
 });
 
 test("run a file directly (error finding dir)", async () => {
@@ -58,7 +61,9 @@ test("run a file directly (error finding dir)", async () => {
   ).resolves.toBe(1);
   expect(stdout).toBe("");
   expect(stderr).toMatch(`Could not find import:\n  ./not-a-real-dir`);
-  expect(stderr).toMatch(`from:\n  lib/__fixtures__/error-handling/cant-resolve-dir.ts`);
+  expect(stderr).toMatch(
+    `from:\n  ${fsPath.join("lib", "__fixtures__", "error-handling", "cant-resolve-dir.ts")}`
+  );
 });
 
 test("run a file directly (file doesn't exist)", async () => {
@@ -170,4 +175,4 @@ test("run allows stdin passthrough", async () => {
   });
 
   expect(stdout).toMatch("Thank you for your valuable feedback: yee");
-}, 1500);
+});

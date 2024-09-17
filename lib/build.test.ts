@@ -43,7 +43,7 @@ test("tsconfig support", async () => {
 });
 test("error handling stderr", async () => {
   try {
-    await runNodeScript(fsPath.join("lib", "__fixtures__", "error-handling", "cant-resolve.ts"));
+    await runNodeScript("lib/__fixtures__/error-handling/cant-resolve.ts");
     expect("didThrow").toBe(true);
   } catch (error) {
     if (error instanceof Error) {
@@ -103,27 +103,19 @@ test("in tmpdir outside ts project", async () => {
   await fs.rm(entryDirectory, { recursive: true, force: true });
 });
 test("import dot", async () => {
-  expect(
-    await runNodeScript(fsPath.join("lib", "__fixtures__", "import-dot", "index.test.ts"))
-  ).toBe("magic");
+  expect(await runNodeScript("lib/__fixtures__/import-dot/index.test.ts")).toBe("magic");
 });
 test("import dot index", async () => {
-  expect(
-    await runNodeScript(fsPath.join("lib", "__fixtures__", "import-dot-index", "index.test.ts"))
-  ).toBe("magic");
+  expect(await runNodeScript("lib/__fixtures__/import-dot-index/index.test.ts")).toBe("magic");
 });
 test("new ts features", async () => {
-  expect(
-    await runNodeScript(
-      fsPath.join(process.cwd(), "lib", "__fixtures__", "new-ts-features", "index.test.ts")
-    )
-  ).toBe("click click i am lorenzo");
+  expect(await runNodeScript("lib/__fixtures__/new-ts-features/index.test.ts")).toBe(
+    "click click i am lorenzo"
+  );
 });
 test("default run dir", async () => {
   // this has to be in build.test instead of run.test to avoid a race condition
-  await expect(
-    run(fsPath.join("lib", "__fixtures__", "new-ts-features", "index.ts"))
-  ).resolves.toBe(0);
+  await expect(run("lib/__fixtures__/new-ts-features/index.ts")).resolves.toBe(0);
 });
 
 const runNodeScript = async (entryFilePath: string): Promise<string> => {
