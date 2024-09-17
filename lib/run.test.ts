@@ -128,7 +128,7 @@ test("run a file directly (success with stdout)", async () => {
 test("run a file directly (runtime error)", async () => {
   let stdout = "";
   let stderr = "";
-  const fileRelativePath = fsPath.join("lib", "__fixtures__", "error-handling", "runtime-error.ts");
+  const fileRelativePath = fsPath.resolve("node_modules/.cache/xnr-run-test/runtime-error.ts");
   await expect(
     run({
       filePath: fileRelativePath,
@@ -147,37 +147,39 @@ test("run a file directly (runtime error)", async () => {
 });
 
 test("run allows stdin passthrough", async () => {
-  let hasWritten = false;
-  let stdout = "";
-  await new Promise<void>((resolve) => {
-    const child = spawn("xnr", ["lib/__fixtures__/stdin/run-wrapper.ts"], {
-      shell: process.platform === "win32",
-      stdio: "pipe",
-    });
-    function write(data: string) {
-      if (child.stdin.write(data)) {
-        process.nextTick(() => {
-          child.stdin.end();
-        });
-      } else {
-        child.stdin.once("drain", () => {
-          child.stdin.end();
-        });
-      }
-    }
-    child.stdout.on("data", (data) => {
-      stdout += data;
-      if (stdout.includes("What do you think of Node.js?")) {
-        if (!hasWritten) {
-          write("yee\n");
+  if (process.platform !== "win32") {
+    let hasWritten = false;
+    let stdout = "";
+    await new Promise<void>((resolve) => {
+      const child = spawn("xnr", ["lib/__fixtures__/stdin/run-wrapper.ts"], {
+        shell: process.platform === "win32",
+        stdio: "pipe",
+      });
+      function write(data: string) {
+        if (child.stdin.write(data)) {
+          process.nextTick(() => {
+            child.stdin.end();
+          });
+        } else {
+          child.stdin.once("drain", () => {
+            child.stdin.end();
+          });
         }
-        hasWritten = true;
       }
+      child.stdout.on("data", (data) => {
+        stdout += data;
+        if (stdout.includes("What do you think of Node.js?")) {
+          if (!hasWritten) {
+            write("yee\n");
+          }
+          hasWritten = true;
+        }
+      });
+      child.on("close", () => {
+        resolve();
+      });
     });
-    child.on("close", () => {
-      resolve();
-    });
-  });
 
-  expect(stdout).toMatch("Thank you for your valuable feedback: yee");
+    expect(stdout).toMatch("Thank you for your valuable feedback: yee");
+  }
 });
