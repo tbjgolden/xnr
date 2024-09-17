@@ -8,7 +8,14 @@ import { createPathsMatcher, getTsconfig, TsConfigResult } from "get-tsconfig";
 
 import { getStringNodeValue, isNodeStringLiteral, isRequire, isRequireMainRequire } from "./ast";
 import { transformSync } from "./transform";
-import { KnownExtension, Method, parseModule, prettyPath, XnrError } from "./utils";
+import {
+  determineModuleType,
+  KnownExtension,
+  Method,
+  parseModule,
+  prettyPath,
+  XnrError,
+} from "./utils";
 
 const EXT_ORDER_MAP_MODULE: Record<KnownExtension, KnownExtension[]> = {
   // ts
@@ -62,7 +69,8 @@ export const createSourceFileTree = (path: string): SourceFileNode => {
 
   let absResolvedPath: string;
   try {
-    absResolvedPath = resolve({ absPath: fsPath.resolve(path), method: "import" });
+    const absPath = fsPath.resolve(path);
+    absResolvedPath = resolve({ absPath, method: determineModuleType(absPath) });
   } catch (error) {
     if (error instanceof XnrCannotResolveError) {
       throw new XnrError(`Could not find import:\n  ${prettyPath(error.absPath)}`);
