@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import fsPath from "node:path";
 import process from "node:process";
+import { pathToFileURL } from "node:url";
 
 import { calcOutput, Output } from "./calcOutput";
 import { createSourceFileTree } from "./createSourceFileTree";
@@ -62,6 +63,9 @@ export type RunConfig = {
   onWriteStderr?: (message: string) => void;
 };
 
+const defaultOnWriteStdout = process.stdout.write.bind(process.stdout);
+const defaultOnWriteStderr = process.stderr.write.bind(process.stderr);
+
 /**
  * Runs a file with auto-transpilation of it and its dependencies, as required.
  *
@@ -80,8 +84,8 @@ export const run = async (filePathOrConfig: string | RunConfig): Promise<number>
     args = [],
     nodeArgs = [],
     outputDirectory: outputDirectory_ = undefined,
-    onWriteStdout = process.stdout.write.bind(process.stdout),
-    onWriteStderr = process.stderr.write.bind(process.stderr),
+    onWriteStdout = defaultOnWriteStdout,
+    onWriteStderr = defaultOnWriteStderr,
   } = typeof filePathOrConfig === "string" ? { filePath: filePathOrConfig } : filePathOrConfig;
 
   let outputDirectory: string;
@@ -118,63 +122,13 @@ export const run = async (filePathOrConfig: string | RunConfig): Promise<number>
       try {
         const { entry, files } = await build({ filePath, outputDirectory });
 
-        const outputDirectoryErrorLocationRegex = new RegExp(
-          `(${`${outputDirectory}${fsPath.sep}`.replaceAll(
-            /[$()*+.?[\\\]^{|}]/g,
-            String.raw`\$&`
-          )}[^:\n]*)(?::\\d+){0,2}`,
-          "g"
-        );
-
         const outputToInputFileLookup = new Map<string, string>();
         for (const { path: relativeOutputPath, sourcePath } of files) {
           outputToInputFileLookup.set(
-            fsPath.resolve(outputDirectory, relativeOutputPath),
+            pathToFileURL(fsPath.resolve(outputDirectory, relativeOutputPath)).toString(),
             sourcePath
           );
         }
-
-        const randomBytes = "&nT@r" + "9F2Td";
-
-        const transformErrors = (str: string) => {
-          if (str.includes(outputDirectory)) {
-            // Replaces output file paths with input file paths
-            for (const match of [...str.matchAll(outputDirectoryErrorLocationRegex)].reverse()) {
-              const file = match[1];
-              const inputFile = outputToInputFileLookup.get(file);
-              if (inputFile) {
-                const nextPartStartIndex = match.index + match[0].length;
-                str = `${str.slice(0, match.index ?? 0)}${inputFile}${randomBytes}${str.slice(
-                  nextPartStartIndex
-                )}`;
-              }
-            }
-
-            // Removes the parts of the stack trace that are constant to all xnr runs
-            const inLines = str.split("\n");
-            const outLines = [];
-
-            let hasFoundFirstSourceFile = false;
-            for (let i = inLines.length - 1; i >= 0; i--) {
-              const inLine = inLines[i];
-              if (hasFoundFirstSourceFile) {
-                outLines.push(inLine);
-              } else {
-                if (inLine.startsWith("    at ")) {
-                  if (inLine.includes(randomBytes)) {
-                    hasFoundFirstSourceFile = true;
-                    outLines.push(inLine);
-                  }
-                } else {
-                  outLines.push(inLine);
-                }
-              }
-            }
-            str = outLines.reverse().join("\n").replaceAll(randomBytes, "");
-          }
-
-          return str;
-        };
 
         process.on("SIGINT", cleanupSync); // CTRL+C
         process.on("SIGQUIT", cleanupSync); // Keyboard quit
@@ -184,10 +138,18 @@ export const run = async (filePathOrConfig: string | RunConfig): Promise<number>
           stdio: ["inherit", "pipe", "pipe"],
         });
         child.stdout.on("data", (data: Buffer) => {
-          onWriteStdout(stripAnsi(data.toString()));
+          if (onWriteStdout === defaultOnWriteStdout) {
+            onWriteStdout(data.toString());
+          } else {
+            onWriteStdout(stripAnsi(data.toString()));
+          }
         });
         child.stderr.on("data", (data: Buffer) => {
-          onWriteStderr(transformErrors(stripAnsi(data.toString())) + "\n");
+          if (onWriteStderr === defaultOnWriteStderr) {
+            onWriteStderr(data.toString());
+          } else {
+            onWriteStderr(stripAnsi(data.toString()));
+          }
         });
 
         child.on("exit", (code: number | null) => {

@@ -140,6 +140,6 @@ test("run a file directly (runtime error)", async () => {
     })
   ).resolves.toBe(1);
   expect(stdout).toBe("");
-  expect(stderr).toMatch(fsPath.resolve("lib/__fixtures__/error-handling/runtime-error.ts"));
+  expect(stderr).toMatch(fsPath.resolve("node_modules/.cache/xnr-run-test/runtime-error.cjs"));
   expect(stderr).toMatch(`throw new Error("runtime error");`);
 });
