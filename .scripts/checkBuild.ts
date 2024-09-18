@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import { execSync, spawn } from "node:child_process";
 import { rmSync } from "node:fs";
+import fsPath from "node:path";
+import { pathToFileURL } from "node:url";
 
 import { checkDirectory, getPackageJson, isFile } from "./lib/utils";
 
@@ -70,14 +72,21 @@ const packageJson = await getPackageJson();
           console.log(messages[0].data);
           process.exit(1);
         }
+
+        const expected = pathToFileURL(
+          fsPath.resolve(".scripts/build-tests/crash-test.ts")
+        ).toString();
         if (
           messages[1]?.type !== "stderr" ||
-          (messages[1]?.data ?? "").split("\n")[0] !==
-            `file://${process.cwd()}/.scripts/build-tests/crash-test.ts`
+          (messages[1]?.data ?? "").split("\n")[0] !== expected
         ) {
           console.log(
             `Expected second log to be to stderr ending with "build-tests/crash-test.ts"`
           );
+          console.log("Expected:");
+          console.log(expected);
+          console.log("Found:");
+          console.log(messages[1]);
           process.exit(1);
         }
       }
