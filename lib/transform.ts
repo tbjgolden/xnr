@@ -26,7 +26,7 @@ export const transformSync = ({
   filePath?: string;
 }): string => {
   const ext = fsPath.extname(filePath ?? "").toLowerCase();
-  let { code } = sucraseTransform(inputCode, {
+  const { code } = sucraseTransform(inputCode, {
     transforms: ["typescript", ...(ext.endsWith("ts") ? [] : ["jsx" as const])],
     jsxPragma: "React.createClass",
     jsxFragmentPragma: "React.Fragment",
@@ -36,9 +36,5 @@ export const transformSync = ({
     disableESTransforms: true,
     production: false,
   });
-  // TODO: test removing this
-  if (code.startsWith("#!")) {
-    code = code.slice(code.indexOf("\n") + 1);
-  }
   return code;
 };

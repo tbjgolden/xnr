@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import fsPath from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { pathToFileURL } from "node:url";
 
 import { AnyNode, AssignmentProperty, Program, VariableDeclaration } from "acorn";
 import { ancestor } from "acorn-walk";
@@ -10,13 +10,12 @@ import { resolve as importResolve } from "import-meta-resolve";
 import {
   asLiteral,
   getStringNodeValue,
-  isCreateRequire,
   isNodeStringLiteral,
   isRequire,
   isRequireMainRequire,
   replaceNode,
 } from "./ast";
-import { determineModuleType, isNodeBuiltin, Method, prettyPath, XnrError } from "./utils";
+import { determineModuleType, isNodeBuiltin, Method, safeFileUrlToPath, XnrError } from "./utils";
 
 type LocalDependency = {
   method: Method;
@@ -181,7 +180,7 @@ const calcFileOutput = ({
               localDependency ?? node.source.value,
               pathToFileURL(file.path).toString()
             );
-            absDependencyEntryFilePath = fsPath.resolve(fileURLToPath(fileUrl));
+            absDependencyEntryFilePath = safeFileUrlToPath(fileUrl);
 
             const dependencyModuleType = determineModuleType(absDependencyEntryFilePath);
 

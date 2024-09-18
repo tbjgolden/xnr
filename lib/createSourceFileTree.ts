@@ -1,6 +1,5 @@
 import fs from "node:fs";
 import fsPath from "node:path";
-import { fileURLToPath } from "node:url";
 
 import { Expression, Literal, Program } from "acorn";
 import { simple } from "acorn-walk";
@@ -14,6 +13,7 @@ import {
   Method,
   parseModule,
   prettyPath,
+  safeFileUrlToPath,
   XnrError,
 } from "./utils";
 
@@ -128,7 +128,7 @@ const createSourceFileTreeRecursive = ({
       ) {
         const absTsResolvedPath = fsPath.resolve(
           fsPath.dirname(absResolvedPath),
-          isFileUrl ? fileURLToPath(tsResolvedPath) : tsResolvedPath
+          isFileUrl ? safeFileUrlToPath(tsResolvedPath) : tsResolvedPath
         );
 
         try {
