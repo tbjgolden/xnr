@@ -92,7 +92,7 @@ const packageJson = await getPackageJson();
     {
       const command = `${cliFilePath} build ./.scripts/build-tests build-tests`;
       const stdout = execSync(`node ${command}`).toString();
-      const expected = "Build completed with 3 files. Run with:\n  node 'build-tests/index.mjs'\n";
+      const expected = `Build completed with 3 files. Run with:\n  node 'build-tests${fsPath.sep}index.mjs'\n`;
       if (stdout !== expected) {
         console.log(`unexpected response when running: ${command}\n`);
         console.log("expected:");
