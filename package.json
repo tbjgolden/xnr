@@ -68,7 +68,7 @@
     "lint-time": "^0.1.1",
     "msg-time": "^0.1.1",
     "prettier": "2.8.8",
-    "pub-time": "^0.1.0",
+    "pub-time": "^1.0.0",
     "rollup": "^4.20.0",
     "simple-git-hooks": "^2.8.1",
     "sucrase": "^3.35.0",
