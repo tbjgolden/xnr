@@ -128,15 +128,9 @@ test("run a file directly (success with stdout)", async () => {
 test("run a file directly (runtime error)", async () => {
   let stdout = "";
   let stderr = "";
-  const fileRelativePath = fsPath.join(
-    "node_modules",
-    ".cache",
-    "xnr-run-test",
-    "runtime-error.ts"
-  );
   await expect(
     run({
-      filePath: fileRelativePath,
+      filePath: "lib/__fixtures__/error-handling/runtime-error.ts",
       outputDirectory: "node_modules/.cache/xnr-run-test",
       writeStdout: (out) => {
         stdout += out;
@@ -147,7 +141,7 @@ test("run a file directly (runtime error)", async () => {
     })
   ).resolves.toBe(1);
   expect(stdout).toBe("");
-  expect(stderr).toMatch(fileRelativePath);
+  expect(stderr).toMatch(fsPath.join("node_modules", ".cache", "xnr-run-test", "runtime-error.ts"));
   expect(stderr).toMatch(`throw new Error("runtime error");`);
 });
 
