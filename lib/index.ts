@@ -58,20 +58,20 @@ export type RunConfig = {
   args?: string[];
   nodeArgs?: string[];
   outputDirectory?: string | undefined;
-  writeStdout?: (message: string) => void;
-  writeStderr?: (message: string) => void;
+  onWriteStdout?: (message: string) => void;
+  onWriteStderr?: (message: string) => void;
 };
 
 /**
  * Runs a file with auto-transpilation of it and its dependencies, as required.
  *
  * @param {string|RunConfig} filePathOrConfig - The path of the file to run or a configuration object.
- * @param {string} [filePathOrConfig.filePath] - The path of the file to run.
- * @param {string[]} [filePathOrConfig.args] - Arguments to pass to the script.
- * @param {string[]} [filePathOrConfig.nodeArgs] - Node.js arguments to pass when running the script.
- * @param {string} [filePathOrConfig.outputDirectory] - Directory for storing output files.
- * @param {Function} [filePathOrConfig.writeStdout] - Function to handle standard output.
- * @param {Function} [filePathOrConfig.writeStderr] - Function to handle standard error output.
+ * @param {string} [filePath] - (or [config.filePath]) The path of the file to run.
+ * @param {string[]} [config.args] - Arguments to pass to the script.
+ * @param {string[]} [config.nodeArgs] - Node.js arguments to pass when running the script.
+ * @param {string} [config.outputDirectory] - Directory for storing output files.
+ * @param {Function} [config.onWriteStdout] - Function to handle standard output.
+ * @param {Function} [config.onWriteStderr] - Function to handle standard error output.
  * @returns {Promise<number>} A promise that resolves with the exit code of the process.
  */
 export const run = async (filePathOrConfig: string | RunConfig): Promise<number> => {
@@ -80,8 +80,8 @@ export const run = async (filePathOrConfig: string | RunConfig): Promise<number>
     args = [],
     nodeArgs = [],
     outputDirectory: outputDirectory_ = undefined,
-    writeStdout = process.stdout.write.bind(process.stdout),
-    writeStderr = process.stderr.write.bind(process.stderr),
+    onWriteStdout = process.stdout.write.bind(process.stdout),
+    onWriteStderr = process.stderr.write.bind(process.stderr),
   } = typeof filePathOrConfig === "string" ? { filePath: filePathOrConfig } : filePathOrConfig;
 
   let outputDirectory: string;
@@ -109,12 +109,12 @@ export const run = async (filePathOrConfig: string | RunConfig): Promise<number>
     }
   }
 
-  const cleanupSync = () => {
-    fs.rmSync(outputDirectory, { recursive: true, force: true });
-  };
-
   return new Promise<number>((resolve) => {
     void (async () => {
+      const cleanupSync = () => {
+        fs.rmSync(outputDirectory, { recursive: true, force: true });
+      };
+
       try {
         const { entry, files } = await build({ filePath, outputDirectory });
 
@@ -179,44 +179,37 @@ export const run = async (filePathOrConfig: string | RunConfig): Promise<number>
         process.on("SIGINT", cleanupSync); // CTRL+C
         process.on("SIGQUIT", cleanupSync); // Keyboard quit
         process.on("SIGTERM", cleanupSync); // `kill` command
-        const child = spawn("node", [...nodeArgs, entry, ...args], {
-          stdio: [
-            // stdin
-            "inherit",
-            // stdout
-            "pipe",
-            // stderr
-            "pipe",
-          ],
-        });
 
+        const child = spawn("node", [...nodeArgs, entry, ...args], {
+          stdio: ["inherit", "pipe", "pipe"],
+        });
         child.stdout.on("data", (data: Buffer) => {
-          writeStdout(stripAnsi(data.toString()));
+          onWriteStdout(stripAnsi(data.toString()));
         });
         child.stderr.on("data", (data: Buffer) => {
-          writeStderr(transformErrors(stripAnsi(data.toString())) + "\n");
+          onWriteStderr(transformErrors(stripAnsi(data.toString())) + "\n");
         });
 
         child.on("exit", (code: number | null) => {
-          process.off("SIGINT", cleanupSync); // CTRL+C
-          process.off("SIGQUIT", cleanupSync); // Keyboard quit
-          process.off("SIGTERM", cleanupSync); // `kill` command
+          process.off("SIGINT", cleanupSync);
+          process.off("SIGQUIT", cleanupSync);
+          process.off("SIGTERM", cleanupSync);
           cleanupSync();
           resolve(code ?? 0);
         });
       } catch (error) {
         if (error instanceof XnrError) {
-          writeStderr(error.message);
-          writeStderr("\n");
+          onWriteStderr(error.message);
+          onWriteStderr("\n");
         } else {
           /* istanbul ignore next */
           if (error instanceof Error) {
             /* istanbul ignore next */ {
-              writeStderr(
+              onWriteStderr(
                 "Unexpected error when running xnr\nIf you are on the latest version, please report this issue on GitHub\n"
               );
-              writeStderr(error.stack ?? error.message);
-              writeStderr("\n");
+              onWriteStderr(error.stack ?? error.message);
+              onWriteStderr("\n");
             }
           }
         }
