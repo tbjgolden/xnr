@@ -120,7 +120,7 @@
       "<rootDir>/lib/*.test.[tj]s"
     ],
     "transform": {
-      "\\.ts$": "<rootDir>/node_modules/xnr/jest.js"
+      "\\.ts$": "<rootDir>/node_modules/xnr/dist/jest.js"
     }
   }
 }
