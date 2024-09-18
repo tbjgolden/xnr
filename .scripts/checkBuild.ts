@@ -174,13 +174,16 @@ const packageJson = await getPackageJson();
     process.exit(1);
   }
 
+  console.log("validating jest...");
   const jestEntry = packageJson.exports["./jest"];
   if (typeof jestEntry === "string") {
     if (!(await isFile(jestEntry))) {
       console.log(`entrypoint file "${jestEntry}" doesn't exist`);
       process.exit(1);
     }
-    const { default: transformer } = (await import(process.cwd() + "/" + jestEntry)) as {
+    const { default: transformer } = (await import(
+      pathToFileURL(fsPath.resolve(jestEntry)).toString()
+    )) as {
       default: { processAsync: (code: string, filename: string) => Promise<{ code: string }> };
     };
     const processResult = await transformer.processAsync(

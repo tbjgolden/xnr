@@ -1,7 +1,6 @@
 import fs from "node:fs";
 import { builtinModules } from "node:module";
 import fsPath from "node:path";
-import { fileURLToPath } from "node:url";
 
 import { Options, parse } from "acorn";
 import { findNodeAt } from "acorn-walk";
@@ -113,9 +112,4 @@ export const isNodeBuiltin = (rawImport: string): boolean => {
 
 export const escapeRegExp = (str: string) => {
   return str.replaceAll(/[$()*+./?[\\\]^{|}]/g, String.raw`\$&`);
-};
-
-// This prevents issues on Windows where paths can start with something that looks like a protocol
-export const safeFileUrlToPath = (url: string) => {
-  return url.startsWith("file://") ? fsPath.resolve(fileURLToPath(url)) : fsPath.resolve(url);
 };
