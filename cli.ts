@@ -58,9 +58,7 @@ function parseArgs(): ParsedArgs {
     result.command = commandOrFilePath;
     result.filePath = args.shift();
   } else if (commandOrFilePath?.startsWith("-")) {
-    console.error(`Error: Found unknown arg '${result.command}'.`);
-    console.error("Run 'xnr --help' for usage information.");
-    process.exit(1);
+    handleOtherArgFound(commandOrFilePath);
   } else {
     result.command = "run";
     result.filePath = commandOrFilePath;
@@ -91,9 +89,7 @@ async function handleBuild({ filePath, outputDirectory }: ParsedArgs) {
     process.exit(1);
   }
   if (outputDirectory.startsWith("-")) {
-    console.error(`Error: Unexpected flag '${filePath}'.`);
-    console.error("Run 'xnr --help' for usage information.");
-    process.exit(1);
+    handleOtherArgFound(filePath);
   }
 
   try {
@@ -118,9 +114,7 @@ async function handleRun({ filePath, outputDirectory, args, nodeArgs }: ParsedAr
     process.exit(1);
   }
   if (filePath.startsWith("-")) {
-    console.error(`Error: Unexpected flag '${filePath}'.`);
-    console.error("Run 'xnr --help' for usage information.");
-    process.exit(1);
+    handleOtherArgFound(filePath);
   }
 
   try {
@@ -132,22 +126,8 @@ async function handleRun({ filePath, outputDirectory, args, nodeArgs }: ParsedAr
   }
 }
 
-// Main function to dispatch commands
-async function main() {
-  if (process.argv.includes("--version") || process.argv.includes("-v")) {
-    let dirname = __dirname;
-    while (dirname !== "/") {
-      if (fs.existsSync(path.join(dirname, "package.json"))) break;
-      dirname = path.dirname(dirname);
-    }
-    const pkgJson = JSON.parse(fs.readFileSync(path.join(dirname, "package.json"), "utf8")) as {
-      version: string;
-    };
-    console.log(`xnr v${pkgJson.version}`);
-    process.exit(0);
-  }
-
-  if (process.argv.includes("--help") || process.argv.includes("-h") || process.argv.length === 2) {
+function handleOtherArgFound(arg: string) {
+  if (arg === "-h" || arg === "--help") {
     console.log(
       "Usage: xnr [command (default: run)] [...]" +
         "\n" +
@@ -166,9 +146,28 @@ async function main() {
         ""
     );
     process.exit(0);
+  } else if (arg === "-v" || arg === "--version") {
+    let dirname = __dirname;
+    while (dirname !== "/") {
+      if (fs.existsSync(path.join(dirname, "package.json"))) break;
+      dirname = path.dirname(dirname);
+    }
+    const pkgJson = JSON.parse(fs.readFileSync(path.join(dirname, "package.json"), "utf8")) as {
+      version: string;
+    };
+    console.log(`xnr v${pkgJson.version}`);
+    process.exit(0);
   }
 
+  console.error(`Error: Found unknown arg '${arg}'.`);
+  console.error("Run 'xnr --help' for usage information.");
+  process.exit(1);
+}
+
+// Main function to dispatch commands
+async function main() {
   const inputArgs = parseArgs();
+
   if (inputArgs.command === "build") {
     await handleBuild(inputArgs);
   } else if (inputArgs.command === "run") {
