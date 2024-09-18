@@ -154,7 +154,7 @@ const packageJson = await getPackageJson();
       console.log(`entrypoint file "${libEntry}" doesn't exist`);
       process.exit(1);
     }
-    const { transform } = (await import(process.cwd() + "/" + libEntry)) as {
+    const { transform } = (await import(pathToFileURL(fsPath.resolve(libEntry)).toString())) as {
       transform: (args: { code: string }) => Promise<string>;
     };
     const result = await transform({
