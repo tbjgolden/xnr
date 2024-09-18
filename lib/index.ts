@@ -119,10 +119,10 @@ export const run = async (filePathOrConfig: string | RunConfig): Promise<number>
         const { entry, files } = await build({ filePath, outputDirectory });
 
         const outputDirectoryErrorLocationRegex = new RegExp(
-          `(${outputDirectory.replaceAll(
+          `(${`${outputDirectory}${fsPath.sep}`.replaceAll(
             /[$()*+.?[\\\]^{|}]/g,
             String.raw`\$&`
-          )}/[^:\n]*)(?::\\d+){0,2}`,
+          )}[^:\n]*)(?::\\d+){0,2}`,
           "g"
         );
 
