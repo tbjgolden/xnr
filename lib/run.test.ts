@@ -124,6 +124,25 @@ test("run a file directly (success with stdout)", async () => {
   expect(stderr).toBe("");
 });
 
+test("run a file directly (ansi escape)", async () => {
+  let stdout = "";
+  let stderr = "";
+  await expect(
+    run({
+      filePath: "lib/__fixtures__/ansi/cyan.cjs",
+      outputDirectory: "node_modules/.cache/xnr-run-test",
+      onWriteStdout: (out) => {
+        stdout += out;
+      },
+      onWriteStderr: (err) => {
+        stderr += err;
+      },
+    })
+  ).resolves.toBe(0);
+  expect(stdout).toBe("I am cyan\n");
+  expect(stderr).toBe("");
+});
+
 test("run a file directly (runtime error)", async () => {
   let stdout = "";
   let stderr = "";

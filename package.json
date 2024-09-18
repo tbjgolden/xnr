@@ -67,6 +67,7 @@
     "jest": "^29.5.0",
     "lint-time": "^0.1.1",
     "msg-time": "^0.1.1",
+    "nano-spawn": "^0.1.0",
     "prettier": "2.8.8",
     "pub-time": "^1.0.0",
     "rollup": "^4.20.0",

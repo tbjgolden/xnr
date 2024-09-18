@@ -74,19 +74,16 @@ const packageJson = await getPackageJson();
         }
 
         const expected = pathToFileURL(
-          fsPath.resolve(".scripts/build-tests/crash-test.ts")
+          fsPath.resolve("node_modules/.cache/xnr/crash-test.mjs")
         ).toString();
         if (
           messages[1]?.type !== "stderr" ||
-          (messages[1]?.data ?? "").split("\n")[0] !== expected
+          !(messages[1]?.data ?? "").split("\n")[0].startsWith(expected)
         ) {
-          console.log(
-            `Expected second log to be to stderr ending with "build-tests/crash-test.ts"`
-          );
-          console.log("Expected:");
+          console.log("Expected to contain:");
           console.log(expected);
           console.log("Found:");
-          console.log(messages[1]);
+          console.log((messages[1]?.data ?? "").split("\n")[0]);
           process.exit(1);
         }
       }

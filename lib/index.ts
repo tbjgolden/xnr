@@ -1,8 +1,8 @@
-import { spawn } from "node:child_process";
 import fs from "node:fs";
 import fsPath from "node:path";
 import process from "node:process";
-import { pathToFileURL } from "node:url";
+
+import spawn from "nano-spawn";
 
 import { calcOutput, Output } from "./calcOutput";
 import { createSourceFileTree } from "./createSourceFileTree";
@@ -120,45 +120,41 @@ export const run = async (filePathOrConfig: string | RunConfig): Promise<number>
       };
 
       try {
-        const { entry, files } = await build({ filePath, outputDirectory });
+        const { entry } = await build({ filePath, outputDirectory });
 
-        const outputToInputFileLookup = new Map<string, string>();
-        for (const { path: relativeOutputPath, sourcePath } of files) {
-          outputToInputFileLookup.set(
-            pathToFileURL(fsPath.resolve(outputDirectory, relativeOutputPath)).toString(),
-            sourcePath
+        try {
+          const child = spawn("node", [...nodeArgs, entry, ...args], {
+            stdio: ["inherit", "pipe", "pipe"],
+          });
+
+          await Promise.all([
+            (async () => {
+              for await (const data of child.stdout) {
+                onWriteStdout(
+                  (onWriteStdout === defaultOnWriteStdout ? data : stripAnsi(data)) + "\n"
+                );
+              }
+            })(),
+            (async () => {
+              for await (const data of child.stderr) {
+                onWriteStderr(
+                  (onWriteStderr === defaultOnWriteStderr ? data : stripAnsi(data)) + "\n"
+                );
+              }
+            })(),
+            child,
+          ]);
+
+          cleanupSync();
+          resolve(0);
+        } catch (error) {
+          cleanupSync();
+          resolve(
+            error instanceof Error && "code" in error && typeof error.code === "number"
+              ? error.code
+              : 1
           );
         }
-
-        process.on("SIGINT", cleanupSync); // CTRL+C
-        process.on("SIGQUIT", cleanupSync); // Keyboard quit
-        process.on("SIGTERM", cleanupSync); // `kill` command
-
-        const child = spawn("node", [...nodeArgs, entry, ...args], {
-          stdio: ["inherit", "pipe", "pipe"],
-        });
-        child.stdout.on("data", (data: Buffer) => {
-          if (onWriteStdout === defaultOnWriteStdout) {
-            onWriteStdout(data.toString());
-          } else {
-            onWriteStdout(stripAnsi(data.toString()));
-          }
-        });
-        child.stderr.on("data", (data: Buffer) => {
-          if (onWriteStderr === defaultOnWriteStderr) {
-            onWriteStderr(data.toString());
-          } else {
-            onWriteStderr(stripAnsi(data.toString()));
-          }
-        });
-
-        child.on("exit", (code: number | null) => {
-          process.off("SIGINT", cleanupSync);
-          process.off("SIGQUIT", cleanupSync);
-          process.off("SIGTERM", cleanupSync);
-          cleanupSync();
-          resolve(code ?? 0);
-        });
       } catch (error) {
         if (error instanceof XnrError) {
           onWriteStderr(error.message);
