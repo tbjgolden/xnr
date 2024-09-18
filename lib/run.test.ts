@@ -128,7 +128,12 @@ test("run a file directly (success with stdout)", async () => {
 test("run a file directly (runtime error)", async () => {
   let stdout = "";
   let stderr = "";
-  const fileRelativePath = fsPath.resolve("node_modules/.cache/xnr-run-test/runtime-error.ts");
+  const fileRelativePath = fsPath.join(
+    "node_modules",
+    ".cache",
+    "xnr-run-test",
+    "runtime-error.ts"
+  );
   await expect(
     run({
       filePath: fileRelativePath,
