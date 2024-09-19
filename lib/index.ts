@@ -1,7 +1,8 @@
-import { spawn } from "node:child_process";
 import fs from "node:fs";
 import fsPath from "node:path";
 import process from "node:process";
+
+import spawn from "nano-spawn";
 
 import { calcOutput, Output } from "./calcOutput";
 import { createSourceFileTree } from "./createSourceFileTree";
@@ -58,20 +59,23 @@ export type RunConfig = {
   args?: string[];
   nodeArgs?: string[];
   outputDirectory?: string | undefined;
-  writeStdout?: (message: string) => void;
-  writeStderr?: (message: string) => void;
+  onWriteStdout?: (message: string) => void;
+  onWriteStderr?: (message: string) => void;
 };
+
+const defaultOnWriteStdout = process.stdout.write.bind(process.stdout);
+const defaultOnWriteStderr = process.stderr.write.bind(process.stderr);
 
 /**
  * Runs a file with auto-transpilation of it and its dependencies, as required.
  *
  * @param {string|RunConfig} filePathOrConfig - The path of the file to run or a configuration object.
- * @param {string} [filePathOrConfig.filePath] - The path of the file to run.
- * @param {string[]} [filePathOrConfig.args] - Arguments to pass to the script.
- * @param {string[]} [filePathOrConfig.nodeArgs] - Node.js arguments to pass when running the script.
- * @param {string} [filePathOrConfig.outputDirectory] - Directory for storing output files.
- * @param {Function} [filePathOrConfig.writeStdout] - Function to handle standard output.
- * @param {Function} [filePathOrConfig.writeStderr] - Function to handle standard error output.
+ * @param {string} [filePath] - (or [config.filePath]) The path of the file to run.
+ * @param {string[]} [config.args] - Arguments to pass to the script.
+ * @param {string[]} [config.nodeArgs] - Node.js arguments to pass when running the script.
+ * @param {string} [config.outputDirectory] - Directory for storing output files.
+ * @param {Function} [config.onWriteStdout] - Function to handle standard output.
+ * @param {Function} [config.onWriteStderr] - Function to handle standard error output.
  * @returns {Promise<number>} A promise that resolves with the exit code of the process.
  */
 export const run = async (filePathOrConfig: string | RunConfig): Promise<number> => {
@@ -80,8 +84,8 @@ export const run = async (filePathOrConfig: string | RunConfig): Promise<number>
     args = [],
     nodeArgs = [],
     outputDirectory: outputDirectory_ = undefined,
-    writeStdout = process.stdout.write.bind(process.stdout),
-    writeStderr = process.stderr.write.bind(process.stderr),
+    onWriteStdout = defaultOnWriteStdout,
+    onWriteStderr = defaultOnWriteStderr,
   } = typeof filePathOrConfig === "string" ? { filePath: filePathOrConfig } : filePathOrConfig;
 
   let outputDirectory: string;
@@ -109,114 +113,61 @@ export const run = async (filePathOrConfig: string | RunConfig): Promise<number>
     }
   }
 
-  const cleanupSync = () => {
-    fs.rmSync(outputDirectory, { recursive: true, force: true });
-  };
-
   return new Promise<number>((resolve) => {
     void (async () => {
+      const cleanupSync = () => {
+        fs.rmSync(outputDirectory, { recursive: true, force: true });
+      };
+
       try {
-        const { entry, files } = await build({ filePath, outputDirectory });
+        const { entry } = await build({ filePath, outputDirectory });
 
-        const outputDirectoryErrorLocationRegex = new RegExp(
-          `(${`${outputDirectory}${fsPath.sep}`.replaceAll(
-            /[$()*+.?[\\\]^{|}]/g,
-            String.raw`\$&`
-          )}[^:\n]*)(?::\\d+){0,2}`,
-          "g"
-        );
+        try {
+          const child = spawn("node", [...nodeArgs, entry, ...args], {
+            stdio: ["inherit", "pipe", "pipe"],
+          });
 
-        const outputToInputFileLookup = new Map<string, string>();
-        for (const { path: relativeOutputPath, sourcePath } of files) {
-          outputToInputFileLookup.set(
-            fsPath.resolve(outputDirectory, relativeOutputPath),
-            sourcePath
+          await Promise.all([
+            (async () => {
+              for await (const data of child.stdout) {
+                onWriteStdout(
+                  (onWriteStdout === defaultOnWriteStdout ? data : stripAnsi(data)) + "\n"
+                );
+              }
+            })(),
+            (async () => {
+              for await (const data of child.stderr) {
+                onWriteStderr(
+                  (onWriteStderr === defaultOnWriteStderr ? data : stripAnsi(data)) + "\n"
+                );
+              }
+            })(),
+            child,
+          ]);
+
+          cleanupSync();
+          resolve(0);
+        } catch (error) {
+          cleanupSync();
+          resolve(
+            error instanceof Error && "code" in error && typeof error.code === "number"
+              ? error.code
+              : 1
           );
         }
-
-        const randomBytes = "&nT@r" + "9F2Td";
-
-        const transformErrors = (str: string) => {
-          if (str.includes(outputDirectory)) {
-            // Replaces output file paths with input file paths
-            for (const match of [...str.matchAll(outputDirectoryErrorLocationRegex)].reverse()) {
-              const file = match[1];
-              const inputFile = outputToInputFileLookup.get(file);
-              if (inputFile) {
-                const nextPartStartIndex = match.index + match[0].length;
-                str = `${str.slice(0, match.index ?? 0)}${inputFile}${randomBytes}${str.slice(
-                  nextPartStartIndex
-                )}`;
-              }
-            }
-
-            // Removes the parts of the stack trace that are constant to all xnr runs
-            const inLines = str.split("\n");
-            const outLines = [];
-
-            let hasFoundFirstSourceFile = false;
-            for (let i = inLines.length - 1; i >= 0; i--) {
-              const inLine = inLines[i];
-              if (hasFoundFirstSourceFile) {
-                outLines.push(inLine);
-              } else {
-                if (inLine.startsWith("    at ")) {
-                  if (inLine.includes(randomBytes)) {
-                    hasFoundFirstSourceFile = true;
-                    outLines.push(inLine);
-                  }
-                } else {
-                  outLines.push(inLine);
-                }
-              }
-            }
-            str = outLines.reverse().join("\n").replaceAll(randomBytes, "");
-          }
-
-          return str;
-        };
-
-        process.on("SIGINT", cleanupSync); // CTRL+C
-        process.on("SIGQUIT", cleanupSync); // Keyboard quit
-        process.on("SIGTERM", cleanupSync); // `kill` command
-        const child = spawn("node", [...nodeArgs, entry, ...args], {
-          stdio: [
-            // stdin
-            "inherit",
-            // stdout
-            "pipe",
-            // stderr
-            "pipe",
-          ],
-        });
-
-        child.stdout.on("data", (data: Buffer) => {
-          writeStdout(stripAnsi(data.toString()));
-        });
-        child.stderr.on("data", (data: Buffer) => {
-          writeStderr(transformErrors(stripAnsi(data.toString())) + "\n");
-        });
-
-        child.on("exit", (code: number | null) => {
-          process.off("SIGINT", cleanupSync); // CTRL+C
-          process.off("SIGQUIT", cleanupSync); // Keyboard quit
-          process.off("SIGTERM", cleanupSync); // `kill` command
-          cleanupSync();
-          resolve(code ?? 0);
-        });
       } catch (error) {
         if (error instanceof XnrError) {
-          writeStderr(error.message);
-          writeStderr("\n");
+          onWriteStderr(error.message);
+          onWriteStderr("\n");
         } else {
           /* istanbul ignore next */
           if (error instanceof Error) {
             /* istanbul ignore next */ {
-              writeStderr(
+              onWriteStderr(
                 "Unexpected error when running xnr\nIf you are on the latest version, please report this issue on GitHub\n"
               );
-              writeStderr(error.stack ?? error.message);
-              writeStderr("\n");
+              onWriteStderr(error.stack ?? error.message);
+              onWriteStderr("\n");
             }
           }
         }

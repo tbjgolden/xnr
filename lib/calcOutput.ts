@@ -10,13 +10,12 @@ import { resolve as importResolve } from "import-meta-resolve";
 import {
   asLiteral,
   getStringNodeValue,
-  isCreateRequire,
   isNodeStringLiteral,
   isRequire,
   isRequireMainRequire,
   replaceNode,
 } from "./ast";
-import { determineModuleType, isNodeBuiltin, Method, prettyPath, XnrError } from "./utils";
+import { determineModuleType, isNodeBuiltin, Method, XnrError } from "./utils";
 
 type LocalDependency = {
   method: Method;

@@ -109,3 +109,7 @@ const BUILTIN_MODULES_SET = new Set(builtinModules);
 export const isNodeBuiltin = (rawImport: string): boolean => {
   return rawImport.startsWith("node:") || BUILTIN_MODULES_SET.has(rawImport);
 };
+
+export const escapeRegExp = (str: string) => {
+  return str.replaceAll(/[$()*+./?[\\\]^{|}]/g, String.raw`\$&`);
+};

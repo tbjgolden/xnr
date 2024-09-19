@@ -1,6 +1,6 @@
 {
   "name": "xnr",
-  "version": "3.0.0-beta.0",
+  "version": "3.0.0-beta.1",
   "license": "Apache-2.0",
   "type": "module",
   "main": "./dist/lib/index.js",
@@ -67,6 +67,7 @@
     "jest": "^29.5.0",
     "lint-time": "^0.1.1",
     "msg-time": "^0.1.1",
+    "nano-spawn": "^0.1.0",
     "prettier": "2.8.8",
     "pub-time": "^1.0.0",
     "rollup": "^4.20.0",
@@ -74,7 +75,7 @@
     "sucrase": "^3.35.0",
     "typescript": "~5.5.4",
     "typescript-eslint": "^8.5.0",
-    "xnr": "^1.1.2"
+    "xnr": "3.0.0-beta.0"
   },
   "files": [
     "dist",
@@ -120,7 +121,7 @@
       "<rootDir>/lib/*.test.[tj]s"
     ],
     "transform": {
-      "\\.ts$": "<rootDir>/node_modules/xnr/jest.js"
+      "\\.ts$": "<rootDir>/node_modules/xnr/dist/jest.js"
     }
   }
 }
