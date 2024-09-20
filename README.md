@@ -14,37 +14,20 @@ _Blazingly fast 🚀_
 npx xnr any-file.{ts,tsx,cts,mts,js,jsx,cjs,mjs}
 ```
 
+Ideal for **utility scripts**, **quick debugging** and **CI pipelines**
+
 ## Key Features
 
-- **Zero Configuration**: Run your TypeScript files directly without needing a `tsconfig` file or
-  any additional setup. Ideal for quick scripts or CI tasks.
-- **Supports Multiple File Types**: Easily run any combination of TypeScript, JavaScript, JSON and
-  JSX files.
-- **Fast Execution**: Skips TypeScript type checking for instant execution.
-- **Lightweight**: Including dependencies &lt;7MB, ideal for CI pipelines.
-- **Flexible and Tolerant**: Works well with different module systems and rogue npm dependencies
-  that expect either `require` or `import`.
-- **Efficient Build System**: Uses `sucrase` to transpile TypeScript to JavaScript and performs fast
-  AST manipulations for optimal interop.
+- **Zero configuration**: Run your TypeScript files directly without needing a `tsconfig` file or
+  any additional setup. Ideal for quick scripts or CI tasks
+- **Supports multiple file types**: Easily run any combination of TypeScript, JavaScript, JSON and
+  JSX files
+- **Lightweight**: Very quick to install at just ~400kB
+- **Flexible and familiar**: Tolerant to different file extensions, but otherwise follows Node
+  conventions
+- **Optimised for Speed**: Faster install+execution time than `xnr`
+- **Focused Scope**: Single goal: run TypeScript code quickly and reliably
 - **Supports Windows**
-
-## Why Choose xnr?
-
-- **Quick and Simple**: Ideal for running TypeScript files without the overhead of setting up a
-  complex build environment or configuration files.
-- **Better Interoperability**: More seamless integration with different module systems compared to
-  `ts-node`.
-- **Optimised for Speed**: Faster install+execution time than `xnr`.
-- **Focused Scope**: Single goal: run TypeScript code quickly and reliably.
-
-## Common Use Cases
-
-1. **Local Development**: Quickly run TypeScript scripts for development purposes without setting up
-   a full build pipeline.
-2. **CI/CD Pipelines**: Use `xnr` in CI environments to run scripts or tests without needing to
-   install heavy dependencies or run long build processes.
-3. **Utility Scripts**: Ideal for writing and running small utility scripts for tasks like linting,
-   formatting, or automating project workflows.
 
 ## Getting Started
 
@@ -61,7 +44,7 @@ npm install --save-dev xnr
 Simply use `npx` to run your TypeScript or JavaScript file:
 
 ```sh
-npx xnr ./file.ts
+npx xnr file.ts
 ```
 
 For running dev scripts in your package.json:
@@ -76,11 +59,9 @@ For running dev scripts in your package.json:
 
 ## Caveats and Scope
 
-- **JSX/TSX Assumptions**: Assumes JSX is React in `.jsx` and `.tsx` files. Other JSX targets may be
-  supported in future versions.
-- **Dynamic Imports/Requires**: Only supports dynamic imports or requires with static strings (e.g.
-  `require("./file.ts")` will work but `require(someVar)` will not)
-- **Node.js Environment**: Requires Node.js LTS version 16 or higher (for full ES module support).
+- Only supports dynamic imports or requires with static strings (e.g. `require("./file.ts")` will
+  work but `require(someVar)` will not)
+- Requires Node.js 16.14 or higher (for full ES module support)
 
 ## CLI
 
@@ -88,7 +69,7 @@ CLI docs can be viewed at any time by running `xnr --help`.
 
 ## API
 
-`xnr` also provides an API with a few more options than the CLI.
+`xnr` also provides an API with a few more options than the CLI:
 
 ```ts
 // Runs a file with auto-transpilation of it and its dependencies, as required.
@@ -116,7 +97,7 @@ A complete list of exports can be viewed on
 
 ## Jest transformer
 
-Add these lines to your jest config to get easy TS transforms.
+Add these lines to your jest config to get easy TS transforms:
 
 ```json
 {
@@ -138,12 +119,11 @@ Add these lines to your jest config to get easy TS transforms.
 | swc-node |         `232`ms |           `235`ms |     `62.0`MB |    very slow |
 | ts-node  |         `661`ms |           `659`ms |      `6.7`MB |        quick |
 
-In general you can expect best-in-class install + run time.
+In general, you can expect best-in-class install + run time.
 
 ## Contributing
 
-Feel free to open issues if you encounter bugs or have suggestions for new features. Additional JSX
-framework compatibility are areas for potential contributions.
+Feel free to open issues if you encounter bugs or have suggestions for new features.
 
 ## Licence
 
