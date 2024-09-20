@@ -74,24 +74,6 @@ For running dev scripts in your package.json:
 }
 ```
 
-### Building for Later Execution
-
-You can also use this to pre-compile TS code for running on Node.
-
-```sh
-xnr build ./entry.ts ./dist/
-```
-
-For running build scripts in your package.json:
-
-```json
-{
-  "scripts": {
-    "build": "xnr build entry.ts dist"
-  }
-}
-```
-
 ## Caveats and Scope
 
 - **JSX/TSX Assumptions**: Assumes JSX is React in `.jsx` and `.tsx` files. Other JSX targets may be
@@ -100,32 +82,32 @@ For running build scripts in your package.json:
   `require("./file.ts")` will work but `require(someVar)` will not)
 - **Node.js Environment**: Requires Node.js LTS version 16 or higher (for full ES module support).
 
-## Performance and Limitations
-
-- **No Type Checking**: Skips TypeScript type checking to speed up execution. If type checking is
-  needed, consider running TypeScript directly.
-
 ## CLI
 
 CLI docs can be viewed at any time by running `xnr --help`.
 
 ## API
 
-`xnr` also provides an API with the same options as the CLI.
+`xnr` also provides an API with a few more options than the CLI.
 
 ```ts
-// Runs a file, auto-transpiling it and its dependencies as required
-export const run = async (
-  filePathOrConfig: string | { filePath: string; args?: string[]; nodeArgs?: string[]; /* ... */  }
-) => Promise<number>; // Exit Code
+// Runs a file with auto-transpilation of it and its dependencies, as required.
+const run: (filePathOrConfig: string | RunConfig) => Promise<number>;
 
-// Convert source code from an entry file into a directory of Node-friendly ESM code
-export const build = ({ filePath: string, outputDirectory: string })
-  => Promise<{ entrypoint: string; /* ... */ }>;
+// Converts all local source code starting from an entry file into a directly runnable directory of Node.js compatible code.
+const build: ({
+  filePath,
+  outputDirectory,
+}: {
+  filePath: string;
+  outputDirectory: string;
+}) => Promise<Output>;
 
-// Convert an input code string to a Node-friendly ESM code string
-export const transform = ({ code: string, filePath?: string })
-  => Promise<string>;
+// Converts all local source code starting from an entry file into a runnable array of Node.js compatible file contents.
+const transpile: ({ filePath }: { filePath: string }) => Promise<Output>;
+
+// Transforms an input code string into a Node-friendly ECMAScript Module (ESM) code string. Unlike the others here, it doesn't rewrite imports.
+const transform: ({ code, filePath }: { code: string; filePath?: string }) => Promise<string>;
 ```
 
 A complete list of exports can be viewed on
@@ -149,13 +131,12 @@ Add these lines to your jest config to get easy TS transforms.
 
 ## Key benchmarks
 
-| runner   | npx on single file | (preinstalled) | install size |
-| -------- | -----------------: | -------------: | -----------: |
-| xnr      |           `0.7`sec |       `0.3`sec |      `0.4`MB |
-| ts-node  |           `0.9`sec |       `0.8`sec |      `6.7`MB |
-| esr      |           `1.8`sec |       `0.4`sec |     `29.9`MB |
-| tsx      |           `4.9`sec |       `0.3`sec |     `29.7`MB |
-| swc-node |           `5.4`sec |       `0.2`sec |     `62.0`MB |
+| runner   | run single file | run small project | install size | install time |
+| -------- | --------------: | ----------------: | -----------: | -----------: |
+| xnr      |          `93`ms |           `102`ms |      `0.4`MB |   very quick |
+| tsx      |         `142`ms |           `146`ms |     `29.7`MB |         slow |
+| swc-node |         `232`ms |           `235`ms |     `62.0`MB |    very slow |
+| ts-node  |         `661`ms |           `659`ms |      `6.7`MB |        quick |
 
 In general you can expect best-in-class install + run time.
 
