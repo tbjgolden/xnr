@@ -7,8 +7,8 @@
 ![license](https://img.shields.io/npm/l/xnr)
 [![install size](https://packagephobia.com/badge?p=xnr)](https://packagephobia.com/result?p=xnr)
 
-Easily, quickly, and reliably run a Node.js script from the CLI with zero configuration. _As fast
-and simple as [`tsx`](https://github.com/privatenumber/tsx) with a much faster install._
+Easily, quickly, and reliably run a TypeScript Node.js script from the CLI with zero configuration.
+_Blazingly fast 🚀_
 
 ```sh
 npx xnr any-file.{ts,tsx,cts,mts,js,jsx,cjs,mjs}
@@ -26,6 +26,7 @@ npx xnr any-file.{ts,tsx,cts,mts,js,jsx,cjs,mjs}
   that expect either `require` or `import`.
 - **Efficient Build System**: Uses `sucrase` to transpile TypeScript to JavaScript and performs fast
   AST manipulations for optimal interop.
+- **Supports Windows**
 
 ## Why Choose xnr?
 
@@ -33,10 +34,8 @@ npx xnr any-file.{ts,tsx,cts,mts,js,jsx,cjs,mjs}
   complex build environment or configuration files.
 - **Better Interoperability**: More seamless integration with different module systems compared to
   `ts-node`.
-- **Optimised for Speed**: Faster install and execution times than `swc` or `esbuild-runner` because
-  `xnr` doesn’t rely on compiled binaries from other languages.
-- **Focused Scope**: Designed to reduce the hassle of running TypeScript in Node.js without
-  overreaching into other tasks or environments.
+- **Optimised for Speed**: Faster install+execution time than `xnr`.
+- **Focused Scope**: Single goal: run TypeScript code quickly and reliably.
 
 ## Common Use Cases
 
@@ -95,8 +94,6 @@ For running build scripts in your package.json:
 
 ## Caveats and Scope
 
-- **Platform Support**: Currently, `xnr` does not support Windows. Contributions to add Windows
-  support are welcome!
 - **JSX/TSX Assumptions**: Assumes JSX is React in `.jsx` and `.tsx` files. Other JSX targets may be
   supported in future versions.
 - **Dynamic Imports/Requires**: Only supports dynamic imports or requires with static strings (e.g.
@@ -135,23 +132,37 @@ A complete list of exports can be viewed on
 [`npmjs.com`](https://www.npmjs.com/package/xnr?activeTab=code) (navigate to
 /xnr/dist/lib/index.d.ts)
 
+## Jest transformer
+
+Add these lines to your jest config to get easy TS transforms.
+
+```json
+{
+  // ...
+  "extensionsToTreatAsEsm": [".ts"],
+  "transform": {
+    "\\.ts$": "<rootDir>/node_modules/xnr/dist/jest.js"
+  }
+  // ...
+}
+```
+
 ## Key benchmarks
 
-| runner    | npx single-ts-file | (preinstalled) | install size |
-| --------- | -----------------: | -------------: | -----------: |
-| xnr@2.0.0 |           `0.7`sec |       `0.3`sec |      `0.4`MB |
-| xnr@1.1.4 |           `0.8`sec |       `0.3`sec |      `6.7`MB |
-| ts-node   |           `0.9`sec |       `0.8`sec |      `6.7`MB |
-| esr       |           `1.8`sec |       `0.4`sec |     `29.9`MB |
-| tsx       |           `4.9`sec |       `0.3`sec |     `29.7`MB |
-| swc-node  |           `5.4`sec |       `0.2`sec |     `62.0`MB |
+| runner   | npx on single file | (preinstalled) | install size |
+| -------- | -----------------: | -------------: | -----------: |
+| xnr      |           `0.7`sec |       `0.3`sec |      `0.4`MB |
+| ts-node  |           `0.9`sec |       `0.8`sec |      `6.7`MB |
+| esr      |           `1.8`sec |       `0.4`sec |     `29.9`MB |
+| tsx      |           `4.9`sec |       `0.3`sec |     `29.7`MB |
+| swc-node |           `5.4`sec |       `0.2`sec |     `62.0`MB |
 
 In general you can expect best-in-class install + run time.
 
 ## Contributing
 
-Feel free to open issues if you encounter bugs or have suggestions for new features. Windows support
-and additional JSX framework compatibility are areas for potential contributions.
+Feel free to open issues if you encounter bugs or have suggestions for new features. Additional JSX
+framework compatibility are areas for potential contributions.
 
 ## Licence
 
