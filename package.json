@@ -110,6 +110,9 @@
     "extensionsToTreatAsEsm": [
       ".ts"
     ],
+    "transform": {
+      "\\.ts$": "<rootDir>/node_modules/xnr/dist/jest.js"
+    },
     "modulePathIgnorePatterns": [
       "<rootDir>/.xnr",
       "<rootDir>/dist",
@@ -119,9 +122,6 @@
     "testEnvironment": "node",
     "testMatch": [
       "<rootDir>/lib/*.test.[tj]s"
-    ],
-    "transform": {
-      "\\.ts$": "<rootDir>/node_modules/xnr/dist/jest.js"
-    }
+    ]
   }
 }
