@@ -1,0 +1,9 @@
+{
+  "type": "module",
+  "devDependencies": {
+    "@swc-node/register": "^1.10.9",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.19.1",
+    "xnr": "^3.0.0-beta.2"
+  }
+}
