@@ -4,7 +4,10 @@ import { tmpdir } from "node:os";
 import fsPath from "node:path";
 import process from "node:process";
 
-import { build } from "./index.ts";
+import * as index from "./index.ts";
+
+// something weird is going on here that crashes without this
+const { build } = index;
 
 test("transpile one file of each extension", async () => {
   await testBatch("single", JSON.stringify({ hello: "world" }));
