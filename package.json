@@ -51,7 +51,6 @@
     "@types/espree": "^10.1.0",
     "@types/jest": "^29.5.1",
     "@types/node": "^20.16.0",
-    "@types/uuid": "^10.0.0",
     "acorn": "^8.12.1",
     "acorn-walk": "^8.3.3",
     "astring": "^1.8.6",
@@ -76,7 +75,6 @@
     "sucrase": "^3.35.0",
     "typescript": "~5.5.4",
     "typescript-eslint": "^8.5.0",
-    "uuid": "^10.0.0",
     "xnr": "3.0.0-beta.0"
   },
   "files": [
