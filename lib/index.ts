@@ -3,6 +3,7 @@ import fsPath from "node:path";
 import process from "node:process";
 
 import spawn from "nano-spawn";
+import { v4 as uuid } from "uuid";
 
 import { calcOutput, Output } from "./calcOutput";
 import { createSourceFileTree } from "./createSourceFileTree";
@@ -107,9 +108,11 @@ export const run = async (filePathOrConfig: string | RunConfig): Promise<number>
         }
         current = nextCurrent;
       }
-      outputDirectory = packageRootPath
-        ? fsPath.join(packageRootPath, "node_modules/.cache/xnr")
+      const outputNamespaceDirectory = packageRootPath
+        ? fsPath.join(packageRootPath, "node_modules/.xnr")
         : fsPath.resolve(".tmp/xnr");
+      outputDirectory = fsPath.resolve(outputNamespaceDirectory, (uuid as () => string)());
+      fs.mkdirSync(outputDirectory, { recursive: true });
     }
   }
 

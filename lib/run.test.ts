@@ -8,7 +8,6 @@ test("run a file directly (success)", async () => {
   await expect(
     run({
       filePath: "lib/__fixtures__/default-export/cjs1.cjs",
-      outputDirectory: "node_modules/.cache/xnr-run-test",
       onWriteStdout: (out) => {
         stdout += out;
       },
@@ -27,7 +26,6 @@ test("run a file directly (error)", async () => {
   await expect(
     run({
       filePath: "lib/__fixtures__/error-handling/cant-resolve.ts",
-      outputDirectory: "node_modules/.cache/xnr-run-test",
       onWriteStdout: (out) => {
         stdout += out;
       },
@@ -49,7 +47,6 @@ test("run a file directly (error finding dir)", async () => {
   await expect(
     run({
       filePath: "lib/__fixtures__/error-handling/cant-resolve-dir.ts",
-      outputDirectory: "node_modules/.cache/xnr-run-test",
       onWriteStdout: (out) => {
         stdout += out;
       },
@@ -71,7 +68,6 @@ test("run a file directly (file doesn't exist)", async () => {
   await expect(
     run({
       filePath: "lib/__fixtures__/a",
-      outputDirectory: "node_modules/.cache/xnr-run-test",
       onWriteStdout: (out) => {
         stdout += out;
       },
@@ -90,7 +86,6 @@ test("run a file directly (path doesn't exist)", async () => {
   await expect(
     run({
       filePath: "lib/__fixtures__/a/b/c",
-      outputDirectory: "node_modules/.cache/xnr-run-test",
       onWriteStdout: (out) => {
         stdout += out;
       },
@@ -111,7 +106,6 @@ test("run a file directly (success with stdout)", async () => {
   await expect(
     run({
       filePath: "lib/__fixtures__/import-json/cjs1.cjs",
-      outputDirectory: "node_modules/.cache/xnr-run-test",
       onWriteStdout: (out) => {
         stdout += out;
       },
@@ -130,7 +124,6 @@ test("run a file directly (ansi escape)", async () => {
   await expect(
     run({
       filePath: "lib/__fixtures__/ansi/cyan.cjs",
-      outputDirectory: "node_modules/.cache/xnr-run-test",
       onWriteStdout: (out) => {
         stdout += out;
       },
@@ -149,7 +142,6 @@ test("run a file directly (runtime error)", async () => {
   await expect(
     run({
       filePath: "lib/__fixtures__/error-handling/runtime-error.ts",
-      outputDirectory: "node_modules/.cache/xnr-run-test",
       onWriteStdout: (out) => {
         stdout += out;
       },
@@ -159,6 +151,7 @@ test("run a file directly (runtime error)", async () => {
     })
   ).resolves.toBe(1);
   expect(stdout).toBe("");
-  expect(stderr).toMatch(fsPath.resolve("node_modules/.cache/xnr-run-test/runtime-error.cjs"));
+  expect(stderr).toMatch(fsPath.resolve("node_modules/.xnr"));
+  expect(stderr).toMatch(`runtime-error.cjs`);
   expect(stderr).toMatch(`throw new Error("runtime error");`);
 });

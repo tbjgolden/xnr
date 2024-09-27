@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import fsPath from "node:path";
 import process from "node:process";
 
-import { build, run } from "./index.ts";
+import { build } from "./index.ts";
 
 test("transpile one file of each extension", async () => {
   await testBatch("single", JSON.stringify({ hello: "world" }));
@@ -112,10 +112,6 @@ test("new ts features", async () => {
   expect(await runNodeScript("lib/__fixtures__/new-ts-features/index.test.ts")).toBe(
     "click click i am lorenzo"
   );
-});
-test("default run dir", async () => {
-  // this has to be in build.test instead of run.test to avoid a race condition
-  await expect(run("lib/__fixtures__/new-ts-features/index.ts")).resolves.toBe(0);
 });
 
 const runNodeScript = async (entryFilePath: string): Promise<string> => {
