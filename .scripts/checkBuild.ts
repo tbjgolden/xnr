@@ -73,9 +73,7 @@ const packageJson = await getPackageJson();
           process.exit(1);
         }
 
-        const expected = pathToFileURL(
-          fsPath.resolve("node_modules/.cache/xnr/crash-test.mjs")
-        ).toString();
+        const expected = pathToFileURL(fsPath.resolve("node_modules/.xnr/")).toString();
         if (
           messages[1]?.type !== "stderr" ||
           !(messages[1]?.data ?? "").split("\n")[0].startsWith(expected)
