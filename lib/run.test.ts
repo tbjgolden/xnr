@@ -154,6 +154,78 @@ test("run a file directly (ansi escape)", async () => {
   expect(stderr).toBe("");
 });
 
+test("run a file directly (dep has js syntax error)", async () => {
+  let stdout = "";
+  let stderr = "";
+  await expect(
+    run({
+      filePath: "lib/__fixtures__/syntax-error/index1.ts",
+      onWriteStdout: (out) => {
+        stdout += out;
+      },
+      onWriteStderr: (err) => {
+        stderr += err;
+      },
+    })
+  ).resolves.toBe(1);
+  expect(stdout).toBe("");
+  expect(stderr).toMatch("Error transforming");
+});
+
+test("run a file directly (dep has ts syntax error)", async () => {
+  let stdout = "";
+  let stderr = "";
+  await expect(
+    run({
+      filePath: "lib/__fixtures__/syntax-error/index2.ts",
+      onWriteStdout: (out) => {
+        stdout += out;
+      },
+      onWriteStderr: (err) => {
+        stderr += err;
+      },
+    })
+  ).resolves.toBe(1);
+  expect(stdout).toBe("");
+  expect(stderr).toMatch("Error transforming");
+});
+
+test("run a file directly (has js syntax error)", async () => {
+  let stdout = "";
+  let stderr = "";
+  await expect(
+    run({
+      filePath: "lib/__fixtures__/syntax-error/js-syntax-error.ts",
+      onWriteStdout: (out) => {
+        stdout += out;
+      },
+      onWriteStderr: (err) => {
+        stderr += err;
+      },
+    })
+  ).resolves.toBe(1);
+  expect(stdout).toBe("");
+  expect(stderr).toMatch("Error transforming");
+});
+
+test("run a file directly (has ts syntax error)", async () => {
+  let stdout = "";
+  let stderr = "";
+  await expect(
+    run({
+      filePath: "lib/__fixtures__/syntax-error/ts-syntax-error.ts",
+      onWriteStdout: (out) => {
+        stdout += out;
+      },
+      onWriteStderr: (err) => {
+        stderr += err;
+      },
+    })
+  ).resolves.toBe(1);
+  expect(stdout).toBe("");
+  expect(stderr).toMatch("Error transforming");
+});
+
 test("run a file directly (runtime error)", async () => {
   let stdout = "";
   let stderr = "";
