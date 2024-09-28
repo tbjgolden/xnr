@@ -1,6 +1,7 @@
 import fs from "node:fs";
+import { createRequire } from "node:module";
 import fsPath from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { Expression, Literal, Program } from "acorn";
 import { simple } from "acorn-walk";
@@ -167,11 +168,23 @@ const createSourceFileTreeRecursive = ({
       }
     }
     if (firstError) {
-      throw new XnrError(
-        `Could not find import:\n  ${prettyPath(rawImport.importPath)}\nfrom:\n  ${prettyPath(
-          absResolvedPath
-        )}`
-      );
+      // This can be reached is an npm dependency is also a valid local path
+      // e.g. when tsconfig has baseUrl set
+      // So we only error if it is not a resolvable npm dependency
+      try {
+        let { importPath } = rawImport;
+        if (importPath.startsWith("file://")) {
+          importPath = fileURLToPath(importPath);
+        }
+        createRequire(pathToFileURL(absResolvedPath)).resolve(importPath);
+        return [];
+      } catch {
+        throw new XnrError(
+          `Could not find import:\n  ${prettyPath(rawImport.importPath)}\nfrom:\n  ${prettyPath(
+            absResolvedPath
+          )}`
+        );
+      }
     }
     throw new Error("Unreachable");
   });

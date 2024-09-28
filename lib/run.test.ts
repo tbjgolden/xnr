@@ -118,6 +118,24 @@ test("run a file directly (success with stdout)", async () => {
   expect(stderr).toBe("");
 });
 
+test("run a file directly (dotenv)", async () => {
+  let stdout = "";
+  let stderr = "";
+  await expect(
+    run({
+      filePath: "lib/__fixtures__/dotenv-test/index.ts",
+      onWriteStdout: (out) => {
+        stdout += out;
+      },
+      onWriteStderr: (err) => {
+        stderr += err;
+      },
+    })
+  ).resolves.toBe(0);
+  expect(stdout).toBe("value\n");
+  expect(stderr).toBe("");
+});
+
 test("run a file directly (ansi escape)", async () => {
   let stdout = "";
   let stderr = "";
