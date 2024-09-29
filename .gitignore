@@ -14,3 +14,4 @@ dist
 !.scripts
 .scripts/benchmark/node_modules
 .scripts/benchmark/package-lock.json
+.DS_Store

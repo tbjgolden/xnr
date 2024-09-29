@@ -154,6 +154,42 @@ test("run a file directly (ansi escape)", async () => {
   expect(stderr).toBe("");
 });
 
+test("can import dir from dependency", async () => {
+  let stdout = "";
+  let stderr = "";
+  await expect(
+    run({
+      filePath: "lib/__fixtures__/import-dir/index.ts",
+      onWriteStdout: (out) => {
+        stdout += out;
+      },
+      onWriteStderr: (err) => {
+        stderr += err;
+      },
+    })
+  ).resolves.toBe(0);
+  expect(stdout).toBe("dir\nindex\ndir2\n");
+  expect(stderr).toBe("");
+});
+
+test("can import dir directly", async () => {
+  let stdout = "";
+  let stderr = "";
+  await expect(
+    run({
+      filePath: "lib/__fixtures__/import-dir/dir",
+      onWriteStdout: (out) => {
+        stdout += out;
+      },
+      onWriteStderr: (err) => {
+        stderr += err;
+      },
+    })
+  ).resolves.toBe(0);
+  expect(stdout).toBe("dir\n");
+  expect(stderr).toBe("");
+});
+
 test("run a file directly (dep has js syntax error)", async () => {
   let stdout = "";
   let stderr = "";
