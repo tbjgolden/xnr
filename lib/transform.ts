@@ -2,7 +2,7 @@ import fsPath from "node:path";
 
 import { transform as sucraseTransform } from "sucrase";
 
-import { XnrError } from "./utils";
+import { SucraseOptions, XnrError } from "./utils";
 
 /**
  * Transforms an input code string into a Node-friendly ECMAScript Module (ESM) code string.
@@ -15,29 +15,32 @@ import { XnrError } from "./utils";
 export const transform = async ({
   code,
   filePath,
+  sucraseOptions = {},
 }: {
   code: string;
   filePath?: string;
-}): Promise<string> => transformSync({ code, filePath });
+  sucraseOptions?: SucraseOptions;
+}): Promise<string> => transformSync({ code, filePath, sucraseOptions });
 
 export const transformSync = ({
   code: inputCode,
   filePath,
+  sucraseOptions = {},
 }: {
   code: string;
   filePath?: string;
+  sucraseOptions?: SucraseOptions;
 }): string => {
   const ext = fsPath.extname(filePath ?? "").toLowerCase();
   try {
     const { code } = sucraseTransform(inputCode, {
-      transforms: ["typescript", ...(ext.endsWith("ts") ? [] : ["jsx" as const])],
-      jsxPragma: "React.createClass",
-      jsxFragmentPragma: "React.Fragment",
       filePath,
+      transforms: ["typescript", ...(ext.endsWith("ts") ? [] : ["jsx" as const])],
       enableLegacyTypeScriptModuleInterop: false,
       enableLegacyBabel5ModuleInterop: false,
       disableESTransforms: true,
       production: false,
+      ...sucraseOptions,
     });
     return code;
   } catch (error) {

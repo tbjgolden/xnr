@@ -2,8 +2,9 @@ import fs from "node:fs";
 import { builtinModules } from "node:module";
 import fsPath from "node:path";
 
-import { Options, parse } from "acorn";
+import { Options as AcornOptions, parse } from "acorn";
 import { findNodeAt } from "acorn-walk";
+import { Options as SucraseOptions_ } from "sucrase";
 
 import { transformSync } from "./transform";
 
@@ -31,7 +32,7 @@ export const prettyPath = (filePath: string) => {
   return filePath.startsWith(process.cwd()) ? fsPath.relative(process.cwd(), filePath) : filePath;
 };
 
-export const parseModule = (code: string, options?: Options) => {
+export const parseModule = (code: string, options?: AcornOptions) => {
   return parse(code, { ...options, sourceType: "module", ecmaVersion: "latest" });
 };
 
@@ -113,3 +114,6 @@ export const isNodeBuiltin = (rawImport: string): boolean => {
 export const escapeRegExp = (str: string) => {
   return str.replaceAll(/[$()*+./?[\\\]^{|}]/g, String.raw`\$&`);
 };
+
+export type SucraseOptions = Omit<SucraseOptions_, "transforms" | "filePath">;
+export type GetSucraseOptions = (absFilePath: string) => SucraseOptions;

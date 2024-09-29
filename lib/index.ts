@@ -6,7 +6,7 @@ import spawn from "nano-spawn";
 
 import { calcOutput, Output } from "./calcOutput";
 import { createSourceFileTree } from "./createSourceFileTree";
-import { XnrError } from "./utils";
+import { GetSucraseOptions, XnrError } from "./utils";
 
 export { type Output } from "./calcOutput";
 export { transform } from "./transform";
@@ -18,9 +18,15 @@ export { transform } from "./transform";
  * @param {string} options.filePath - The path of the entry file.
  * @returns {Promise<Output>} A promise that resolves with the output files and their contents, with an entrypoint.
  */
-export const transpile = async ({ filePath }: { filePath: string }): Promise<Output> => {
-  const entrypoint = fsPath.resolve(filePath);
-  const sourceFileTree = createSourceFileTree(entrypoint);
+export const transpile = async ({
+  filePath,
+  getSucraseOptions = () => ({}),
+}: {
+  filePath: string;
+  getSucraseOptions?: GetSucraseOptions;
+}): Promise<Output> => {
+  const entry = fsPath.resolve(filePath);
+  const sourceFileTree = createSourceFileTree({ entry, getSucraseOptions });
   return calcOutput(sourceFileTree);
 };
 
@@ -35,11 +41,13 @@ export const transpile = async ({ filePath }: { filePath: string }): Promise<Out
 export const build = async ({
   filePath,
   outputDirectory,
+  getSucraseOptions = () => ({}),
 }: {
   filePath: string;
   outputDirectory: string;
+  getSucraseOptions?: GetSucraseOptions;
 }): Promise<Output> => {
-  const { entry, files } = await transpile({ filePath });
+  const { entry, files } = await transpile({ filePath, getSucraseOptions });
 
   outputDirectory = fsPath.resolve(outputDirectory);
   fs.rmSync(outputDirectory, { recursive: true, force: true });
@@ -58,6 +66,7 @@ export type RunConfig = {
   filePath: string;
   args?: string[];
   nodeArgs?: string[];
+  getSucraseOptions?: GetSucraseOptions;
   outputDirectory?: string | undefined;
   onWriteStdout?: (message: string) => void;
   onWriteStderr?: (message: string) => void;
@@ -83,6 +92,7 @@ export const run = async (filePathOrConfig: string | RunConfig): Promise<number>
     filePath,
     args = [],
     nodeArgs = [],
+    getSucraseOptions = () => ({}),
     outputDirectory: outputDirectory_ = undefined,
     onWriteStdout = defaultOnWriteStdout,
     onWriteStderr = defaultOnWriteStderr,
@@ -125,7 +135,7 @@ export const run = async (filePathOrConfig: string | RunConfig): Promise<number>
       };
 
       try {
-        const { entry } = await build({ filePath, outputDirectory });
+        const { entry } = await build({ filePath, outputDirectory, getSucraseOptions });
 
         try {
           const child = spawn("node", [...nodeArgs, entry, ...args], {
@@ -191,4 +201,4 @@ const stripAnsi = (string: string) => {
   );
 };
 
-export { XnrError } from "./utils";
+export { type GetSucraseOptions, type SucraseOptions, XnrError } from "./utils";

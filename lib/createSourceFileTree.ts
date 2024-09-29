@@ -11,6 +11,7 @@ import { getStringNodeValue, isNodeStringLiteral, isRequire, isRequireMainRequir
 import { transformSync } from "./transform";
 import {
   determineModuleType,
+  GetSucraseOptions,
   KnownExtension,
   Method,
   parseModule,
@@ -62,9 +63,15 @@ export type SourceFileNode = {
   localDependencies: LocalDependency[];
 };
 
-export const createSourceFileTree = (path: string): SourceFileNode => {
+export const createSourceFileTree = ({
+  entry,
+  getSucraseOptions = () => ({}),
+}: {
+  entry: string;
+  getSucraseOptions?: GetSucraseOptions;
+}): SourceFileNode => {
   const resolve = createResolve();
-  const absPath = fsPath.resolve(path);
+  const absPath = fsPath.resolve(entry);
 
   let absResolvedPath: string;
   try {
@@ -79,6 +86,7 @@ export const createSourceFileTree = (path: string): SourceFileNode => {
   return createSourceFileTreeRecursive({
     absResolvedPath,
     resolve,
+    getSucraseOptions,
     astCache: new Map<string, Program>(),
     resultCache: new Map<string, SourceFileNode>(),
     resolverCache: new Map<string, BasePathResolver>(),
@@ -93,12 +101,14 @@ const isJsonExt = (absFilePath: string) => {
 const createSourceFileTreeRecursive = ({
   absResolvedPath,
   resolve,
+  getSucraseOptions,
   astCache,
   resultCache,
   resolverCache,
 }: {
   absResolvedPath: string;
   resolve: ReturnType<typeof createResolve>;
+  getSucraseOptions: GetSucraseOptions;
   astCache: Map<string, Program>;
   resultCache: Map<string, SourceFileNode>;
   resolverCache: Map<string, BasePathResolver>;
@@ -109,7 +119,13 @@ const createSourceFileTreeRecursive = ({
     code = "module.exports = " + code;
   }
 
-  const ast: Program = parseModule(transformSync({ code, filePath: absResolvedPath }));
+  const ast: Program = parseModule(
+    transformSync({
+      code,
+      filePath: absResolvedPath,
+      sucraseOptions: getSucraseOptions(absResolvedPath),
+    })
+  );
   astCache.set(absResolvedPath, ast);
 
   const resolvePaths = getContextualPathResolver(absResolvedPath, resolverCache);
@@ -152,6 +168,7 @@ const createSourceFileTreeRecursive = ({
                     astCache,
                     resultCache,
                     resolverCache,
+                    getSucraseOptions,
                   }),
                 },
               ];

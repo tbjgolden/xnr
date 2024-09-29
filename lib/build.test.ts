@@ -117,8 +117,36 @@ test("new ts features", async () => {
   );
 });
 
+test("with custom sucrase options", async () => {
+  {
+    const { entry } = await build({
+      filePath: fsPath.resolve("lib/__fixtures__/custom-sucrase/index.ts"),
+      outputDirectory: fsPath.resolve("node_modules/.xnrb"),
+    });
+
+    expect(await fs.readFile(entry, "utf8")).toMatch("?.");
+  }
+
+  await fs.rm(fsPath.resolve("node_modules/.xnrb"), { recursive: true, force: true });
+
+  {
+    const { entry } = await build({
+      filePath: fsPath.resolve("lib/__fixtures__/custom-sucrase/index.ts"),
+      outputDirectory: fsPath.resolve("node_modules/.xnrb"),
+      getSucraseOptions: () => ({ disableESTransforms: false }),
+    });
+
+    const fileContents = await fs.readFile(entry, "utf8");
+    expect(fileContents).not.toMatch("?.");
+  }
+});
+
+afterEach(async () => {
+  await fs.rm(fsPath.resolve("node_modules/.xnrb"), { recursive: true, force: true });
+});
+
 const runNodeScript = async (entryFilePath: string): Promise<string> => {
-  const outputDirectory = fsPath.resolve("node_modules/.cache/xnr");
+  const outputDirectory = fsPath.resolve("node_modules/.xnrb");
 
   const absoluteEntryFilePath = fsPath.resolve(entryFilePath);
   const { entry } = await build({
@@ -126,7 +154,7 @@ const runNodeScript = async (entryFilePath: string): Promise<string> => {
     outputDirectory,
   });
   return new Promise<string>((resolve) => {
-    const child = fork(entry, [], { stdio: "pipe" });
+    const child = fork(entry, [], { stdio: "pipe", env: { NO_COLOR: "1" } });
     let stdout = "";
     child.stdout?.on("data", (data) => {
       stdout += data;
