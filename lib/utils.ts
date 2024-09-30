@@ -115,5 +115,12 @@ export const escapeRegExp = (str: string) => {
   return str.replaceAll(/[$()*+./?[\\\]^{|}]/g, String.raw`\$&`);
 };
 
+export const stripAnsi = (string: string) => {
+  return string.replaceAll(
+    // eslint-disable-next-line no-control-regex
+    /\u001B\[\d+m/g,
+    ""
+  );
+};
+
 export type SucraseOptions = Omit<SucraseOptions_, "transforms" | "filePath">;
-export type GetSucraseOptions = (absFilePath: string) => SucraseOptions;

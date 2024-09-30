@@ -11,11 +11,11 @@ import { getStringNodeValue, isNodeStringLiteral, isRequire, isRequireMainRequir
 import { transformSync } from "./transform";
 import {
   determineModuleType,
-  GetSucraseOptions,
   KnownExtension,
   Method,
   parseModule,
   prettyPath,
+  SucraseOptions,
   XnrError,
 } from "./utils";
 
@@ -68,7 +68,7 @@ export const createSourceFileTree = ({
   getSucraseOptions = () => ({}),
 }: {
   entry: string;
-  getSucraseOptions?: GetSucraseOptions;
+  getSucraseOptions?: (absFilePath: string) => SucraseOptions;
 }): SourceFileNode => {
   const resolve = createResolve();
   const absPath = fsPath.resolve(entry);
@@ -108,7 +108,7 @@ const createSourceFileTreeRecursive = ({
 }: {
   absResolvedPath: string;
   resolve: ReturnType<typeof createResolve>;
-  getSucraseOptions: GetSucraseOptions;
+  getSucraseOptions: (absFilePath: string) => SucraseOptions;
   astCache: Map<string, Program>;
   resultCache: Map<string, SourceFileNode>;
   resolverCache: Map<string, BasePathResolver>;
