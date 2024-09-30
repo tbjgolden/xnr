@@ -65,7 +65,7 @@ test("calcOutput (incl internal)", async () => {
       {
         contents: "import 'dotenv/config';\nconsole.log(process.env.TEST);\n",
         path: "index.mjs",
-        sourcePath: "/Users/tom/Documents/xnr/lib/__fixtures__/dotenv-test/index.ts",
+        sourcePath: fsPath.resolve("lib/__fixtures__/dotenv-test/index.ts"),
       },
     ],
     packages: new Set(["dotenv"]),
