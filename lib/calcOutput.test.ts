@@ -3,7 +3,7 @@ import fsPath from "node:path";
 import { calcOutput } from "./calcOutput.ts";
 import { createSourceFileTree } from "./createSourceFileTree.ts";
 
-test("calcOutput", async () => {
+test("calcOutput (all internal)", async () => {
   expect(calcOutput(createSourceFileTree({ entry: "lib/__fixtures__/import-all/mjs.ts" }))).toEqual(
     {
       entry: fsPath.join("import-all", "mjs.mjs"),
@@ -51,6 +51,23 @@ test("calcOutput", async () => {
           sourcePath: fsPath.resolve("lib/__fixtures__/default-export/mjs1.js"),
         },
       ],
+      packages: new Set([]),
     }
   );
+});
+
+test("calcOutput (incl internal)", async () => {
+  expect(
+    calcOutput(createSourceFileTree({ entry: "lib/__fixtures__/dotenv-test/index.ts" }))
+  ).toEqual({
+    entry: "index.mjs",
+    files: [
+      {
+        contents: "import 'dotenv/config';\nconsole.log(process.env.TEST);\n",
+        path: "index.mjs",
+        sourcePath: "/Users/tom/Documents/xnr/lib/__fixtures__/dotenv-test/index.ts",
+      },
+    ],
+    packages: new Set(["dotenv"]),
+  });
 });

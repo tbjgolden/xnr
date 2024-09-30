@@ -143,7 +143,9 @@ afterEach(async () => {
 });
 
 const runNodeScript = async (entryFilePath: string): Promise<string> => {
-  const outputDirectory = fsPath.resolve("node_modules/.xnrb");
+  const outputDirectory = fsPath.resolve(
+    `node_modules/.xnrb/${Math.random().toString(36).slice(2)}`
+  );
 
   const absoluteEntryFilePath = fsPath.resolve(entryFilePath);
   const { entry } = await build({
@@ -160,9 +162,10 @@ const runNodeScript = async (entryFilePath: string): Promise<string> => {
       stdout += data;
     });
     child.on("exit", () => {
-      void fs.rm(outputDirectory, { recursive: true, force: true }).then(() => {
-        resolve(stdout.trim());
-      });
+      resolve(stdout.trim());
+      setTimeout(() => {
+        void fs.rm(outputDirectory, { recursive: true, force: true });
+      }, 100);
     });
   });
 };

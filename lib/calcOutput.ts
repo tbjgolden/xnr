@@ -31,13 +31,14 @@ export type OutputFile = {
 export type Output = {
   entry: string;
   files: OutputFile[];
-  // externals: ExternalDependency[];
+  packages: Set<string>;
 };
 
 export const calcOutput = (sourceFileTree: SourceFileNode): Output => {
   const closestCommonRootPath = getClosestCommonRootPath(sourceFileTree);
 
   const absOutputFiles: OutputFile[] = [];
+  const packages = new Set<string>();
 
   const processFile = (file: SourceFileNode, absOutputFilePath: string): string => {
     const importPathMap = new Map<string, string>();
@@ -50,6 +51,9 @@ export const calcOutput = (sourceFileTree: SourceFileNode): Output => {
         localDependency.raw,
         getRelativeNodeImportPath(absOutputFilePath, absDepOutputFilePath)
       );
+    }
+    for (const externalDependency of file.externalDependencies) {
+      packages.add(externalDependency.package);
     }
     const contents = calcFileOutput({ file, importPathMap });
     absOutputFiles.push({ path: absOutputFilePath, contents, sourcePath: file.path });
@@ -67,6 +71,7 @@ export const calcOutput = (sourceFileTree: SourceFileNode): Output => {
   return {
     entry: files[0].path,
     files,
+    packages,
   };
 };
 

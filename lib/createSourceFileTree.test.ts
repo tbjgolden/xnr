@@ -89,8 +89,7 @@ test("createSourceFileTree (with ext)", async () => {
         type: "external",
         method: "import",
         package: "dotenv",
-        raw: "dotenv/config",
-        resolved: "/Users/tom/Documents/xnr/lib/__fixtures__/dotenv-test/dotenv/config",
+        path: "dotenv/config",
       },
     ],
   });

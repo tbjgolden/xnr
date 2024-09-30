@@ -26,7 +26,7 @@ export const build = async ({
   outputDirectory: string;
   getSucraseOptions?: (absFilePath: string) => SucraseOptions;
 }): Promise<Output> => {
-  const { entry, files } = await transpile({ filePath, getSucraseOptions });
+  const { entry, files, packages } = await transpile({ filePath, getSucraseOptions });
 
   outputDirectory = fsPath.resolve(outputDirectory);
   fs.rmSync(outputDirectory, { recursive: true, force: true });
@@ -38,5 +38,5 @@ export const build = async ({
     fs.writeFileSync(absPath, contents);
   }
 
-  return { entry: fsPath.resolve(outputDirectory, entry), files };
+  return { entry: fsPath.resolve(outputDirectory, entry), files, packages };
 };
