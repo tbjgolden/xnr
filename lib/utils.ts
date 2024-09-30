@@ -2,7 +2,7 @@ import fs from "node:fs";
 import { builtinModules } from "node:module";
 import fsPath from "node:path";
 
-import { Options as AcornOptions, parse } from "acorn";
+import { Options as AcornOptions, parse, Program } from "acorn";
 import { findNodeAt } from "acorn-walk";
 import { Options as SucraseOptions_ } from "sucrase";
 
@@ -123,4 +123,63 @@ export const stripAnsi = (string: string) => {
   );
 };
 
+const INVALID_NAME_SET = new Set(["node_modules", "favicon.ico", ...builtinModules]);
+const NPM_IMPORT_REGEX = /^(?:(@[^/]+)\/)?([^/]+)/;
+
+export const getNpmPackageFromImport = (importPath: string): string | undefined => {
+  if (
+    importPath === "" ||
+    importPath.startsWith(".") ||
+    importPath.startsWith("_") ||
+    importPath.trim() !== importPath
+  ) {
+    return undefined;
+  }
+  const nameLower = importPath.toLowerCase();
+  if (INVALID_NAME_SET.has(nameLower)) {
+    return undefined;
+  }
+  const nameMatch = NPM_IMPORT_REGEX.exec(importPath);
+  if (nameMatch) {
+    const scope = nameMatch[1];
+    const pkg = nameMatch[2];
+    if (scope && scope !== encodeURIComponent(scope)) {
+      return undefined;
+    }
+    if (pkg !== encodeURIComponent(pkg)) {
+      return undefined;
+    }
+    return scope ? `${scope}${pkg}` : pkg;
+  } else {
+    return undefined;
+  }
+};
+
+export const isExternalDependency = (importPath: string): boolean => {
+  return Boolean(getNpmPackageFromImport(importPath));
+};
+
 export type SucraseOptions = Omit<SucraseOptions_, "transforms" | "filePath">;
+
+export type LocalDependency = {
+  type: "local";
+  method: Method;
+  raw: string;
+  file: SourceFileNode;
+};
+
+export type ExternalDependency = {
+  type: "external";
+  method: Method;
+  path: string;
+  package: string;
+};
+
+export type Dependency = LocalDependency | ExternalDependency;
+
+export type SourceFileNode = {
+  path: string;
+  ast: Program;
+  localDependencies: LocalDependency[];
+  externalDependencies: ExternalDependency[];
+};

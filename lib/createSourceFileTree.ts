@@ -1,7 +1,6 @@
 import fs from "node:fs";
-import { createRequire } from "node:module";
 import fsPath from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 
 import { Expression, Literal, Program } from "acorn";
 import { simple } from "acorn-walk";
@@ -10,11 +9,14 @@ import { createPathsMatcher, getTsconfig, TsConfigResult } from "get-tsconfig";
 import { getStringNodeValue, isNodeStringLiteral, isRequire, isRequireMainRequire } from "./ast";
 import { transformSync } from "./transform";
 import {
+  Dependency,
   determineModuleType,
+  getNpmPackageFromImport,
+  isNodeBuiltin,
   KnownExtension,
-  Method,
   parseModule,
   prettyPath,
+  SourceFileNode,
   SucraseOptions,
   XnrError,
 } from "./utils";
@@ -50,18 +52,6 @@ class XnrCannotResolveError extends Error {
     this.name = "XnrCannotResolveError";
   }
 }
-
-export type LocalDependency = {
-  method: Method;
-  raw: string;
-  file: SourceFileNode;
-};
-
-export type SourceFileNode = {
-  path: string;
-  ast: Program;
-  localDependencies: LocalDependency[];
-};
 
 export const createSourceFileTree = ({
   entry,
@@ -130,19 +120,34 @@ const createSourceFileTreeRecursive = ({
 
   const resolvePaths = getContextualPathResolver(absResolvedPath, resolverCache);
 
-  const sourceFile: SourceFileNode = { path: absResolvedPath, ast, localDependencies: [] };
+  const sourceFile: SourceFileNode = {
+    path: absResolvedPath,
+    ast,
+    localDependencies: [],
+    externalDependencies: [],
+  };
   resultCache.set(absResolvedPath, sourceFile);
 
-  sourceFile.localDependencies = readImports(ast).flatMap((rawImport): LocalDependency[] => {
+  const dependencies = readImports(ast).flatMap((rawImport): Dependency[] => {
     const tsResolvedPaths = resolvePaths(rawImport.importPath);
     let firstError: XnrCannotResolveError | undefined;
     for (const tsResolvedPath of tsResolvedPaths) {
       const isFileUrl = tsResolvedPath.startsWith("file://");
-      if (
-        tsResolvedPath.startsWith(".") ||
-        fsPath.isAbsolute(tsResolvedPath) ||
-        (rawImport.method === "import" && isFileUrl)
-      ) {
+
+      const npmPackage = getNpmPackageFromImport(rawImport.importPath);
+
+      if (npmPackage) {
+        return [
+          {
+            type: "external",
+            method: rawImport.method,
+            path: rawImport.importPath,
+            package: npmPackage,
+          },
+        ];
+      } else if (isNodeBuiltin(rawImport.importPath)) {
+        return [];
+      } else {
         const absTsResolvedPath = fsPath.resolve(
           fsPath.dirname(absResolvedPath),
           isFileUrl ? fileURLToPath(tsResolvedPath) : tsResolvedPath
@@ -157,9 +162,10 @@ const createSourceFileTreeRecursive = ({
           const cachedResult = resultCache.get(absResolvedImportPath);
           const method = isJsonExt(absResolvedImportPath) ? "require" : rawImport.method;
           return cachedResult
-            ? [{ method, raw: rawImport.importPath, file: cachedResult }]
+            ? [{ type: "local", method, raw: rawImport.importPath, file: cachedResult }]
             : [
                 {
+                  type: "local",
                   method,
                   raw: rawImport.importPath,
                   file: createSourceFileTreeRecursive({
@@ -180,31 +186,25 @@ const createSourceFileTreeRecursive = ({
             throw error;
           }
         }
-      } else {
-        return [];
       }
     }
     if (firstError) {
-      // This can be reached is an npm dependency is also a valid local path
-      // e.g. when tsconfig has baseUrl set
-      // So we only error if it is not a resolvable npm dependency
-      try {
-        let { importPath } = rawImport;
-        if (importPath.startsWith("file://")) {
-          importPath = fileURLToPath(importPath);
-        }
-        createRequire(pathToFileURL(absResolvedPath)).resolve(importPath);
-        return [];
-      } catch {
-        throw new XnrError(
-          `Could not find import:\n  ${prettyPath(rawImport.importPath)}\nfrom:\n  ${prettyPath(
-            absResolvedPath
-          )}`
-        );
-      }
+      throw new XnrError(
+        `Could not find import:\n  ${prettyPath(rawImport.importPath)}\nfrom:\n  ${prettyPath(
+          absResolvedPath
+        )}`
+      );
     }
     throw new Error("Unreachable");
   });
+
+  for (const dependency of dependencies) {
+    if (dependency.type === "external") {
+      sourceFile.externalDependencies.push(dependency);
+    } else {
+      sourceFile.localDependencies.push(dependency);
+    }
+  }
 
   return sourceFile;
 };

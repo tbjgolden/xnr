@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import fsPath from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { AnyNode, AssignmentProperty, Program, VariableDeclaration } from "acorn";
+import { AnyNode, AssignmentProperty, VariableDeclaration } from "acorn";
 import { ancestor } from "acorn-walk";
 import { generate } from "astring";
 import { resolve as importResolve } from "import-meta-resolve";
@@ -15,19 +15,7 @@ import {
   isRequireMainRequire,
   replaceNode,
 } from "./ast";
-import { determineModuleType, isNodeBuiltin, Method, XnrError } from "./utils";
-
-type LocalDependency = {
-  method: Method;
-  raw: string;
-  file: SourceFileNode;
-};
-
-type SourceFileNode = {
-  path: string;
-  ast: Program;
-  localDependencies: LocalDependency[];
-};
+import { determineModuleType, isNodeBuiltin, Method, SourceFileNode, XnrError } from "./utils";
 
 export type OutputFile = {
   path: string;
@@ -43,6 +31,7 @@ export type OutputFile = {
 export type Output = {
   entry: string;
   files: OutputFile[];
+  // externals: ExternalDependency[];
 };
 
 export const calcOutput = (sourceFileTree: SourceFileNode): Output => {

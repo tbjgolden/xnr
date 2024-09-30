@@ -16,9 +16,6 @@ test("transpile one file of each extension with a default export", async () => {
   await testBatch("default-export", "");
 });
 test("transpile each filetype containing imports from every filetype", async () => {
-  await testBatch("default-export", "");
-});
-test("transpile each filetype containing imports from every filetype", async () => {
   await testBatch("import-all", new Array(6).fill(JSON.stringify({ hello: "world" })).join("\n"));
 });
 test("can import json from every filetype", async () => {
